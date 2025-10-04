@@ -1628,4 +1628,5 @@ For API support and questions:
 
 **API Version:** 1.0.0  
 **Last Updated:** January 2024  
-**Laravel Version:** 11.0+
+**Laravel Version:** 11.0+  
+**License:** [MIT License](../LICENSE)

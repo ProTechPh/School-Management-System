@@ -1004,4 +1004,5 @@ class StudentService
 
 **Last Updated:** January 2024  
 **Laravel Version:** 11.0+  
-**PHP Version:** 8.3+
+**PHP Version:** 8.3+  
+**License:** [MIT License](../LICENSE)
