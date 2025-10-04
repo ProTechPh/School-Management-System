@@ -51,7 +51,7 @@ This guide provides comprehensive instructions for deploying the School Manageme
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/ProTechPh/School-Management-System.git
 cd school-management-system
 ```
 
@@ -125,7 +125,7 @@ EXIT;
 
 ```bash
 # Clone repository
-git clone <repository-url> /var/www/school-management
+git clone https://github.com/ProTechPh/School-Management-System.git /var/www/school-management
 cd /var/www/school-management
 
 # Set permissions
@@ -211,7 +211,7 @@ chmod +x deploy.sh
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/ProTechPh/School-Management-System.git
 cd school-management-system
 
 # Configure environment

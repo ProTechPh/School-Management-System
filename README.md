@@ -6,7 +6,7 @@ A comprehensive, modern school management system built with Laravel 11, featurin
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/ProTechPh/School-Management-System.git
 cd school-management-system
 
 # Install dependencies
@@ -132,7 +132,7 @@ Visit `http://localhost:8000` to access the application.
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/ProTechPh/School-Management-System.git
    cd school-management-system
    ```
 
@@ -187,7 +187,7 @@ Visit `http://localhost:8000` to access the application.
 
 1. **Clone and setup**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/ProTechPh/School-Management-System.git
    cd school-management-system
    cp .env.example .env
    ```
@@ -485,12 +485,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Email**: Contact the development team
 
 ### Community
-- **GitHub**: [Repository](https://github.com/your-org/school-management-system)
-- **Issues**: [Bug Reports & Feature Requests](https://github.com/your-org/school-management-system/issues)
-- **Discussions**: [Community Discussions](https://github.com/your-org/school-management-system/discussions)
+- **GitHub**: [Repository](https://github.com/ProTechPh/School-Management-System)
+- **Issues**: [Bug Reports & Feature Requests](https://github.com/ProTechPh/School-Management-System/issues)
+- **Discussions**: [Community Discussions](https://github.com/ProTechPh/School-Management-System/discussions)
 
 ---
 
 **Built with ❤️ using Laravel 11 and modern web technologies**
 
-*Last updated: January 2024*
+*Last updated: Oct 2025*

@@ -105,7 +105,7 @@ Welcome to the comprehensive documentation for the School Management System. Thi
 ### Quick Setup
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/ProTechPh/School-Management-System.git
 cd school-management-system
 
 # Install dependencies
