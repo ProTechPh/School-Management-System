@@ -140,7 +140,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Dashboard" subtitle="Welcome back, Admin" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         {/* Stats Grid */}
         <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard title="Total Students" value={data?.totalStudents || 0} icon={Users} />

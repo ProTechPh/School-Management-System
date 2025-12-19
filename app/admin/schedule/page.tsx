@@ -98,7 +98,7 @@ export default function SchedulePage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Schedule" subtitle="View class schedules" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6">
           <Select value={selectedDay} onValueChange={setSelectedDay}>
             <SelectTrigger className="w-[180px]">

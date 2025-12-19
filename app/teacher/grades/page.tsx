@@ -245,7 +245,7 @@ export default function TeacherGradesPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Manage Grades" subtitle="Enter and view student grades (Philippine Grading System)" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         {/* Grade Scale Reference */}
         <div className="grid gap-6 mb-6 md:grid-cols-2">
           <Card className="bg-card">

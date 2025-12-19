@@ -112,7 +112,7 @@ export default function AdminQuizzesPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Quizzes" subtitle="View all quizzes across the school" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6 grid gap-4 md:grid-cols-4">
           <Card className="bg-card">
             <CardContent className="p-4">

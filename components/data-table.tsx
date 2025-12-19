@@ -27,8 +27,8 @@ export function DataTable<T extends { id: string }>({ columns, data, onRowClick 
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card">
-      <Table>
+    <div className="rounded-lg border border-border bg-card overflow-x-auto">
+      <Table className="min-w-[600px]">
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
             {columns.map((column) => (

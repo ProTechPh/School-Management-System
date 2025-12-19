@@ -411,7 +411,7 @@ export default function TeachersPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Teachers" subtitle="Manage teaching staff" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 gap-3">
             <div className="relative flex-1 max-w-sm">

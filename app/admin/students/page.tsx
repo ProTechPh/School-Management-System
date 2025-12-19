@@ -297,7 +297,7 @@ export default function StudentsPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Students" subtitle="Manage student records" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         {/* Stats */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card className="bg-card border-border">

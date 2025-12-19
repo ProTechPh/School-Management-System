@@ -241,7 +241,7 @@ export default function AdminGradesPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Grade Management" subtitle="View student grades and computed final grades (Philippine Grading System)" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <Card className="mb-6 bg-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">

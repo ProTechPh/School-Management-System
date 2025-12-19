@@ -145,7 +145,7 @@ export default function AttendancePage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Attendance" subtitle="Track and manage student attendance" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6 grid gap-4 md:grid-cols-4">
           <div className="rounded-lg border border-border bg-card p-4">
             <p className="text-sm text-muted-foreground">Total Records</p>

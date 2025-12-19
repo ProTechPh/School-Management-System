@@ -175,7 +175,7 @@ export default function StudentDashboard() {
         subtitle={`Welcome back, ${userName.split(" ")[0]}`}
         userId={userId}
       />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard title="My Classes" value={classes.length} icon={BookOpen} />
           <StatCard title="Average Grade" value={`${avgGrade}%`} icon={TrendingUp} />

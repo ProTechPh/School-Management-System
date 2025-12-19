@@ -76,7 +76,7 @@ export default function TeacherClassesPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="My Classes" subtitle="Manage your assigned classes" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {classes.map((cls) => (
             <Card key={cls.id} className="bg-card">

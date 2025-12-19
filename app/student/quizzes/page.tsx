@@ -491,7 +491,7 @@ export default function StudentQuizzesPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Quizzes" subtitle="View and take your class quizzes" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-foreground">Available Quizzes</h2>
           <p className="text-sm text-muted-foreground">{quizzes.length} quizzes available</p>

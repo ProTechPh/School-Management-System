@@ -537,7 +537,7 @@ export function ProfilePage({ role }: ProfilePageProps) {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="My Profile" subtitle="Manage your personal information" userId={user?.id} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Profile Header Card */}
           <Card>

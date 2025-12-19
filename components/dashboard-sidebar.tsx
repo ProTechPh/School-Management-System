@@ -20,11 +20,15 @@ import {
   Settings,
   UserPlus,
   User,
+  Menu,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
+import { useState } from "react"
+
 type UserRole = "admin" | "teacher" | "student"
 
 interface SidebarProps {
@@ -81,7 +85,12 @@ const studentLinks = [
   { href: "/student/profile", label: "My Profile", icon: User },
 ]
 
-export function DashboardSidebar({ role, userName, userAvatar }: SidebarProps) {
+function SidebarContent({ 
+  role, 
+  userName, 
+  userAvatar, 
+  onLinkClick 
+}: SidebarProps & { onLinkClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -95,68 +104,107 @@ export function DashboardSidebar({ role, userName, userAvatar }: SidebarProps) {
   }
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-sidebar">
-      <div className="flex h-full flex-col">
-        {/* Logo */}
-        <div className="flex h-16 items-center gap-2 border-b border-border px-6">
+    <div className="flex h-full flex-col">
+      {/* Logo */}
+      <div className="flex h-16 items-center gap-2 border-b border-border px-6">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+          <GraduationCap className="h-5 w-5 text-primary-foreground" />
+        </div>
+        <span className="text-lg font-semibold text-sidebar-foreground">LessonGo</span>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        {links.map((link) => {
+          const isActive = pathname === link.href
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={onLinkClick}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              )}
+            >
+              <link.icon className="h-5 w-5 shrink-0" />
+              {link.label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      {/* User section */}
+      <div className="border-t border-border p-4">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-10 w-10 shrink-0">
+            <AvatarImage src={userAvatar || "/placeholder.svg"} alt={userName} />
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              {userName
+                .split(" ")
+                .map((n) => n[0])
+                .join("")}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="truncate text-sm font-medium text-sidebar-foreground">{userName}</p>
+            <p className="truncate text-xs text-sidebar-foreground/60">{roleLabel}</p>
+          </div>
+        </div>
+        <div className="mt-3">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="w-full justify-start text-sidebar-foreground/70"
+            onClick={handleLogout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function DashboardSidebar({ role, userName, userAvatar }: SidebarProps) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      {/* Mobile Header with Menu Button */}
+      <div className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center gap-4 border-b border-border bg-background px-4 lg:hidden">
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="shrink-0">
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle menu</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64 p-0 bg-sidebar">
+            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+            <SidebarContent 
+              role={role} 
+              userName={userName} 
+              userAvatar={userAvatar}
+              onLinkClick={() => setOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
+        <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <GraduationCap className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-lg font-semibold text-sidebar-foreground">LessonGo</span>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {links.map((link) => {
-            const isActive = pathname === link.href
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                )}
-              >
-                <link.icon className="h-5 w-5" />
-                {link.label}
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* User section */}
-        <div className="border-t border-border p-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={userAvatar || "/placeholder.svg"} alt={userName} />
-              <AvatarFallback className="bg-primary text-primary-foreground">
-                {userName
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-sidebar-foreground">{userName}</p>
-              <p className="truncate text-xs text-sidebar-foreground/60">{roleLabel}</p>
-            </div>
-          </div>
-          <div className="mt-3">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="w-full justify-start text-sidebar-foreground/70"
-              onClick={handleLogout}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
-          </div>
+          <span className="text-lg font-semibold">LessonGo</span>
         </div>
       </div>
-    </aside>
+
+      {/* Desktop Sidebar */}
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 border-r border-border bg-sidebar lg:block">
+        <SidebarContent role={role} userName={userName} userAvatar={userAvatar} />
+      </aside>
+    </>
   )
 }

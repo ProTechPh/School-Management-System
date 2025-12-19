@@ -313,7 +313,7 @@ export default function TeacherLessonsPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Lessons" subtitle="Create and manage lesson content" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">My Lessons</h2>

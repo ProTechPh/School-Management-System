@@ -166,7 +166,7 @@ export default function TeacherAttendancePage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Take Attendance" subtitle="Record student attendance for your classes" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-3">
             <Select value={selectedClass} onValueChange={setSelectedClass}>

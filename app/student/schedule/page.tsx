@@ -103,7 +103,7 @@ export default function StudentSchedulePage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="My Schedule" subtitle="View your weekly class schedule" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="grid gap-4 md:grid-cols-5">
           {days.map((day) => (
             <Card key={day} className="bg-card">

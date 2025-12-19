@@ -217,6 +217,7 @@ export default function UsersPage() {
           name: newUser.name,
           role: newUser.role as "admin" | "teacher" | "student",
           created_at: new Date().toISOString(),
+          is_active: true,
         },
       ])
 
@@ -325,7 +326,7 @@ export default function UsersPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="User Accounts" subtitle="Create and manage user login accounts" />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         {/* Stats */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card className="bg-card border-border">

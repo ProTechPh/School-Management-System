@@ -119,7 +119,7 @@ export default function AdminLessonsPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Lessons" subtitle="View all lessons across the school" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 gap-4">
             <div className="relative flex-1 max-w-xs">

@@ -105,7 +105,7 @@ export default function StudentGradesPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="My Grades" subtitle="View your academic performance (Philippine Grading System)" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <Card className="mb-6 bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">

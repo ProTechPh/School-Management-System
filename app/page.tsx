@@ -4,8 +4,21 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { GraduationCap, LogIn, Loader2, BookOpen, Users, ClipboardCheck, Calendar } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { 
+  GraduationCap, 
+  LogIn, 
+  Loader2, 
+  BookOpen, 
+  Users, 
+  ClipboardCheck, 
+  BarChart3,
+  QrCode,
+  MessageSquare,
+  Shield,
+  ArrowRight,
+  Sparkles
+} from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 export default function HomePage() {
@@ -43,107 +56,238 @@ export default function HomePage() {
     )
   }
 
+  const features = [
+    {
+      icon: BookOpen,
+      title: "Class Management",
+      description: "Organize classes, lessons, and quizzes in one place",
+      color: "text-emerald-400",
+      bg: "bg-emerald-400/10"
+    },
+    {
+      icon: QrCode,
+      title: "QR Attendance",
+      description: "Quick check-in with location verification",
+      color: "text-blue-400",
+      bg: "bg-blue-400/10"
+    },
+    {
+      icon: BarChart3,
+      title: "Grade Analytics",
+      description: "Track performance with customizable weights",
+      color: "text-violet-400",
+      bg: "bg-violet-400/10"
+    },
+    {
+      icon: MessageSquare,
+      title: "Communication",
+      description: "In-app messaging and announcements",
+      color: "text-amber-400",
+      bg: "bg-amber-400/10"
+    },
+    {
+      icon: Users,
+      title: "Role-Based Access",
+      description: "Tailored dashboards for each user type",
+      color: "text-rose-400",
+      bg: "bg-rose-400/10"
+    },
+    {
+      icon: Sparkles,
+      title: "AI Assistant",
+      description: "Mira AI helps with educational queries",
+      color: "text-cyan-400",
+      bg: "bg-cyan-400/10"
+    }
+  ]
+
+  const stats = [
+    { value: "3", label: "User Roles" },
+    { value: "10+", label: "Features" },
+    { value: "QR", label: "Check-in" },
+    { value: "AI", label: "Powered" }
+  ]
+
   return (
-    <main className="min-h-screen bg-background">
-      {/* Top Navigation */}
-      <nav className="border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <GraduationCap className="h-4 w-4 text-primary-foreground" />
+    <main className="min-h-screen bg-background overflow-hidden">
+      {/* Gradient Background */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute top-0 -left-40 w-80 h-80 bg-primary/20 rounded-full blur-[100px]" />
+        <div className="absolute top-40 -right-40 w-96 h-96 bg-violet-500/15 rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-blue-500/10 rounded-full blur-[100px]" />
+      </div>
+
+      {/* Navigation */}
+      <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/25">
+              <GraduationCap className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-foreground">LessonGo</span>
+            <span className="text-xl font-bold text-foreground">LessonGo</span>
           </div>
           <Button size="sm" asChild>
             <Link href="/login">
               <LogIn className="mr-2 h-4 w-4" />
-              Login
+              Sign in
             </Link>
           </Button>
         </div>
       </nav>
 
-      <div className="mx-auto max-w-5xl px-4 py-16">
-        {/* Hero */}
-        <div className="mb-16 text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary">
-            <GraduationCap className="h-10 w-10 text-primary-foreground" />
+      {/* Hero Section */}
+      <section className="mx-auto max-w-6xl px-4 pt-20 pb-16">
+        <div className="text-center max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-sm text-primary mb-8">
+            <Shield className="h-4 w-4" />
+            <span>Secure school management platform</span>
           </div>
-          <h1 className="mb-4 text-5xl font-bold tracking-tight text-foreground">LessonGo</h1>
-          <p className="text-xl text-muted-foreground mb-8">
-            Modern School Management System
+          
+          <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground mb-6">
+            Daniel Maramba
+            <span className="block text-primary">National High School</span>
+          </h1>
+          
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto px-4">
+            School management system for administrators, teachers, and students. 
+            Streamline attendance, grades, communication, and more.
           </p>
-          <Button size="lg" asChild>
+          
+          <Button size="lg" className="h-12 px-8 text-base" asChild>
             <Link href="/login">
-              Get Started
+              <LogIn className="mr-2 h-5 w-5" />
+              Sign in
             </Link>
           </Button>
         </div>
 
-        {/* Features */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 mb-2">
-                <BookOpen className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle className="text-lg">Class Management</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Organize classes, lessons, and quizzes with ease
-              </CardDescription>
-            </CardContent>
-          </Card>
+        {/* Stats */}
+        <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {stats.map((stat, i) => (
+            <div 
+              key={i} 
+              className="text-center p-6 rounded-2xl bg-card/50 border border-border/50 backdrop-blur-sm"
+            >
+              <div className="text-3xl md:text-4xl font-bold text-primary mb-1">{stat.value}</div>
+              <div className="text-sm text-muted-foreground">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 mb-2">
-                <ClipboardCheck className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle className="text-lg">Attendance Tracking</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                QR code check-in with location verification
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 mb-2">
-                <Calendar className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle className="text-lg">Grade Management</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Track grades with customizable weight settings
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 mb-2">
-                <Users className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle className="text-lg">Role-Based Access</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Separate dashboards for admins, teachers, and students
-              </CardDescription>
-            </CardContent>
-          </Card>
+      {/* Features Section */}
+      <section className="mx-auto max-w-6xl px-4 py-20">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            Everything you need
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+            Powerful features designed for modern educational institutions
+          </p>
         </div>
 
-        {/* Footer */}
-        <p className="mt-16 text-center text-sm text-muted-foreground">
-          Contact your administrator to get an account.
-        </p>
-      </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature, i) => (
+            <Card 
+              key={i} 
+              className="group bg-card/50 border-border/50 backdrop-blur-sm hover:bg-card/80 hover:border-border transition-all duration-300"
+            >
+              <CardContent className="p-6">
+                <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${feature.bg} mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                  <feature.icon className={`h-6 w-6 ${feature.color}`} />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">{feature.title}</h3>
+                <p className="text-muted-foreground text-sm">{feature.description}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* Roles Section */}
+      <section className="mx-auto max-w-6xl px-4 py-20">
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
+          {[
+            { 
+              role: "Admin", 
+              icon: Shield,
+              description: "Full system access, user management, and analytics dashboard",
+              features: ["Manage all users", "View analytics", "System settings"]
+            },
+            { 
+              role: "Teacher", 
+              icon: ClipboardCheck,
+              description: "Class management, attendance tracking, and grade recording",
+              features: ["Create lessons", "Track attendance", "Record grades"]
+            },
+            { 
+              role: "Student", 
+              icon: GraduationCap,
+              description: "View classes, check grades, and QR code attendance",
+              features: ["View schedule", "Check grades", "QR check-in"]
+            }
+          ].map((item, i) => (
+            <div 
+              key={i}
+              className="relative p-6 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 border border-border/50 backdrop-blur-sm"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <item.icon className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">{item.role}</h3>
+              </div>
+              <p className="text-muted-foreground text-sm mb-4">{item.description}</p>
+              <ul className="space-y-2">
+                {item.features.map((f, j) => (
+                  <li key={j} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="mx-auto max-w-6xl px-4 py-20">
+        <div className="relative rounded-3xl bg-gradient-to-r from-primary/20 via-primary/10 to-violet-500/20 border border-primary/20 p-6 sm:p-12 text-center overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(var(--primary),0.1),transparent_50%)]" />
+          <div className="relative">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-4">
+              Ready to get started?
+            </h2>
+            <p className="text-muted-foreground text-lg mb-8 max-w-xl mx-auto">
+              Contact the DMNHS administrator to get your account set up.
+            </p>
+            <Button size="lg" className="h-12 px-8" asChild>
+              <Link href="/login">
+                Sign in to your account
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border/50 bg-card/30 backdrop-blur-sm">
+        <div className="mx-auto max-w-6xl px-4 py-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                <GraduationCap className="h-4 w-4 text-primary-foreground" />
+              </div>
+              <span className="font-semibold text-foreground">LessonGo</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              © 2025 Daniel Maramba National High School
+            </p>
+          </div>
+        </div>
+      </footer>
     </main>
   )
 }

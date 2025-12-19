@@ -100,7 +100,7 @@ export default function StudentAnnouncementsPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Announcements" subtitle="Stay updated with school announcements" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="space-y-4">
           {announcements.length === 0 ? (
             <Card>

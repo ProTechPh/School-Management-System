@@ -56,7 +56,7 @@ export function AIChat({ userRole, userName }: AIChatProps) {
   ]
 
   return (
-    <Card className="flex h-[600px] flex-col overflow-hidden">
+    <Card className="flex h-[calc(100vh-10rem)] lg:h-[600px] flex-col overflow-hidden">
       <CardHeader className="border-b border-border px-4 py-3">
         <CardTitle className="flex items-center gap-2 text-lg">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
@@ -79,7 +79,7 @@ export function AIChat({ userRole, userName }: AIChatProps) {
                   I'm Mira AI, your AI learning assistant. How can I help you today?
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-4">
                 {suggestedQuestions.map((question, index) => (
                   <Button
                     key={index}

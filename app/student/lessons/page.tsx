@@ -108,7 +108,7 @@ export default function StudentLessonsPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Lessons" subtitle="Access your class lessons and materials" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-foreground">My Lessons</h2>
           <p className="text-sm text-muted-foreground">{lessons.length} lessons available</p>

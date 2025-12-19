@@ -150,7 +150,7 @@ export default function AdminAnnouncementsPage() {
   return (
     <div className="min-h-screen">
       <DashboardHeader title="Announcements" subtitle="Create and manage school-wide announcements" userId={userId} />
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <div className="flex justify-end mb-6">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

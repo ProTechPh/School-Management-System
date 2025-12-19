@@ -51,7 +51,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   return (
     <div className="min-h-screen bg-background">
       <DashboardSidebar role="teacher" userName={user?.name || "Teacher"} userAvatar={user?.avatar} />
-      <div className="pl-64">
+      <div className="pt-14 lg:pt-0 lg:pl-64">
         <main>{children}</main>
       </div>
     </div>
