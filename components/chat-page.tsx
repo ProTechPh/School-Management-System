@@ -361,7 +361,7 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
   return (
     <div className="p-4 lg:p-6">
       <div className="grid h-[calc(100vh-8rem)] lg:h-[600px] grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className={cn("flex flex-col", selectedUser ? "hidden lg:flex" : "")}
+        <Card className={cn("flex flex-col", selectedUser ? "hidden lg:flex" : "")}>
           <CardHeader className="p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
