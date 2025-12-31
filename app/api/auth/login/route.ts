@@ -1,14 +1,23 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { loginRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: Request) {
   try {
+    // Get IP address for rate limiting
+    // In production, you might need to check 'x-forwarded-for' header
+    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    
+    // Check rate limit
+    if (!loginRateLimit.check(ip)) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Please try again later." },
+        { status: 429 }
+      )
+    }
+
     const { email, password } = await request.json()
     
-    // Artificial delay to prevent rapid brute-force attacks
-    // In a real production app, use Redis/Upstash for proper rate limiting
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
     const supabase = await createClient()
     
     const { data, error } = await supabase.auth.signInWithPassword({

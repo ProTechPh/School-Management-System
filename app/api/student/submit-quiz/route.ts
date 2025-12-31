@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid submission data" }, { status: 400 })
     }
 
-    // 1. Fetch Quiz and Questions
+    // 1. Fetch Quiz Details
     const { data: quiz, error: quizError } = await supabase
       .from("quizzes")
       .select(`
@@ -33,59 +33,57 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 })
     }
 
-    // SECURITY FIX: Verify student enrollment
-    const { data: enrollment } = await supabase
-      .from("class_students")
-      .select("id")
-      .eq("class_id", quiz.class_id)
+    // 2. Fetch Existing Attempt (Must exist from start-quiz)
+    const { data: attempt, error: attemptError } = await supabase
+      .from("quiz_attempts")
+      .select("id, created_at, completed_at")
+      .eq("quiz_id", quizId)
       .eq("student_id", user.id)
       .single()
 
-    if (!enrollment) {
-      return NextResponse.json({ error: "You are not enrolled in this class" }, { status: 403 })
+    if (attemptError || !attempt) {
+      return NextResponse.json({ error: "Quiz attempt not started. Please start the quiz properly." }, { status: 400 })
     }
 
-    // 2. Validate Due Date
+    if (attempt.completed_at) {
+      return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 })
+    }
+
+    // 3. Server-Side Time Verification
+    // Calculate time taken based on server timestamp
+    const startTime = new Date(attempt.created_at).getTime()
+    const now = Date.now()
+    const durationMinutes = (now - startTime) / 1000 / 60
+    
+    // Allow a small buffer (e.g., 2 minutes) for network latency/clock skew
+    const allowedDuration = quiz.duration + 2 
+
+    if (durationMinutes > allowedDuration) {
+      // Flag suspicious attempt instead of rejecting outright to avoid data loss
+      console.warn(`Suspicious quiz duration: User ${user.id} took ${durationMinutes.toFixed(1)} mins for ${quiz.duration} min quiz`)
+      // You might want to add a 'flagged' column to quiz_attempts in a real schema
+    }
+
+    // 4. Validate Due Date (Double check)
     if (quiz.due_date) {
       const dueDate = new Date(quiz.due_date)
-      const now = new Date()
-      if (now.getTime() > dueDate.getTime() + 5 * 60 * 1000) {
-        const { data: reopen } = await supabase
+      // Allow 5 min buffer
+      if (now > dueDate.getTime() + 5 * 60 * 1000) {
+         // Check for reopen extension
+         const { data: reopen } = await supabase
           .from("quiz_reopens")
           .select("new_due_date")
           .eq("quiz_id", quizId)
           .eq("student_id", user.id)
           .single()
 
-        if (!reopen || new Date(reopen.new_due_date).getTime() < now.getTime()) {
+        if (!reopen || new Date(reopen.new_due_date).getTime() < now) {
            return NextResponse.json({ error: "Quiz submission is past due" }, { status: 403 })
         }
       }
     }
 
-    // 3. Create Attempt Record
-    const { data: attempt, error: attemptError } = await supabase
-      .from("quiz_attempts")
-      .insert({
-        quiz_id: quizId,
-        student_id: user.id,
-        score: 0,
-        max_score: 0,
-        percentage: 0,
-        needs_grading: true,
-        completed_at: new Date().toISOString(),
-        tab_switches: activityLog?.tabSwitches || 0,
-        copy_paste_count: activityLog?.copyPasteCount || 0,
-        exit_attempts: activityLog?.exitAttempts || 0
-      })
-      .select()
-      .single()
-
-    if (attemptError) {
-      return NextResponse.json({ error: "Failed to save attempt" }, { status: 500 })
-    }
-
-    // 4. Grade Answers
+    // 5. Grade Answers
     let totalScore = 0
     let maxScore = 0
     let hasUngradedItems = false
@@ -131,12 +129,12 @@ export async function POST(request: Request) {
       })
     }
 
-    // 5. Save Graded Answers
+    // 6. Save Graded Answers
     if (gradedAnswers.length > 0) {
       await supabase.from("quiz_attempt_answers").insert(gradedAnswers)
     }
 
-    // 6. Update Attempt with Final Score
+    // 7. Update Attempt with Final Score
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
     await supabase
@@ -145,7 +143,11 @@ export async function POST(request: Request) {
         score: totalScore,
         max_score: maxScore,
         percentage: percentage,
-        needs_grading: hasUngradedItems
+        needs_grading: hasUngradedItems,
+        completed_at: new Date().toISOString(),
+        tab_switches: activityLog?.tabSwitches || 0,
+        copy_paste_count: activityLog?.copyPasteCount || 0,
+        exit_attempts: activityLog?.exitAttempts || 0
       })
       .eq("id", attempt.id)
 

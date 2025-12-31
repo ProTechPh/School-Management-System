@@ -64,6 +64,7 @@ export default function StudentQuizzesPage() {
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const [startingQuiz, setStartingQuiz] = useState(false)
   
   const activityLogRef = useRef({
     tabSwitches: 0,
@@ -180,21 +181,40 @@ export default function StudentQuizzesPage() {
   }
 
   const handleStartQuiz = async (quiz: Quiz) => {
-    setTakingQuiz(quiz)
-    setCurrentQuestion(0)
-    const initialAnswers = quiz.questions.map(q => {
-      if (q.type === "identification" || q.type === "essay") {
-        return ""
+    setStartingQuiz(true)
+    try {
+      // Notify server that quiz is starting to establish start time
+      const response = await fetch("/api/student/start-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId: quiz.id })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to start quiz")
       }
-      return -1
-    })
-    setSelectedAnswers(initialAnswers)
-    setShowResults(false)
-    setQuizResult(null)
-    setIsSubmitting(false)
-    setTimeRemaining(quiz.duration * 60)
-    
-    activityLogRef.current = { tabSwitches: 0, copyPasteCount: 0, exitAttempts: 0, rightClicks: 0 }
+
+      setTakingQuiz(quiz)
+      setCurrentQuestion(0)
+      const initialAnswers = quiz.questions.map(q => {
+        if (q.type === "identification" || q.type === "essay") {
+          return ""
+        }
+        return -1
+      })
+      setSelectedAnswers(initialAnswers)
+      setShowResults(false)
+      setQuizResult(null)
+      setIsSubmitting(false)
+      setTimeRemaining(quiz.duration * 60)
+      
+      activityLogRef.current = { tabSwitches: 0, copyPasteCount: 0, exitAttempts: 0, rightClicks: 0 }
+    } catch (error: any) {
+      toast.error("Could not start quiz", { description: error.message })
+    } finally {
+      setStartingQuiz(false)
+    }
   }
 
   const formatTime = (seconds: number) => {
@@ -219,9 +239,6 @@ export default function StudentQuizzesPage() {
         const answer = selectedAnswers[index]
         let answerValue: string | number = answer
 
-        // For multiple choice/true-false, we send the index
-        // For text inputs, we send the string
-        
         return {
           questionId: question.id,
           answer: answerValue
@@ -555,8 +572,12 @@ export default function StudentQuizzesPage() {
                         <span className="text-xs text-muted-foreground">
                           Due: {quiz.due_date ? new Date(quiz.due_date).toLocaleDateString() : "No due date"}
                         </span>
-                        <Button size="sm" onClick={() => handleStartQuiz(quiz)} disabled={isPastDue || quiz.questions.length === 0}>
-                          Start Quiz
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleStartQuiz(quiz)} 
+                          disabled={isPastDue || quiz.questions.length === 0 || startingQuiz}
+                        >
+                          {startingQuiz ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start Quiz"}
                         </Button>
                       </div>
                     )}
