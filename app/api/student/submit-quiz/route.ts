@@ -57,19 +57,20 @@ export async function POST(request: Request) {
     // Allow a small buffer (2 minutes) for network latency
     const allowedDuration = quiz.duration + 2 
 
-    let needsManualReview = false
-    let flaggingReason = ""
-
     if (durationMinutes > allowedDuration) {
-      // Flag as suspicious if time limit exceeded
-      needsManualReview = true
-      flaggingReason = "Time limit exceeded"
+      // SECURITY FIX: Strictly reject submissions that exceed the time limit
+      // Instead of just flagging, we reject the submission or force auto-submit with 0 score for unanswered
+      // Here we reject to force student to contact teacher, preventing cheat submissions
+      return NextResponse.json({ 
+        error: "Time limit exceeded. Your submission was rejected." 
+      }, { status: 403 })
     }
 
     // 4. Validate Due Date
     if (quiz.due_date) {
       const dueDate = new Date(quiz.due_date)
-      if (now > dueDate.getTime() + 5 * 60 * 1000) { // 5 min buffer
+      // Allow 5 min buffer for due date
+      if (now > dueDate.getTime() + 5 * 60 * 1000) { 
          const { data: reopen } = await supabase
           .from("quiz_reopens")
           .select("new_due_date")
@@ -137,12 +138,8 @@ export async function POST(request: Request) {
     // 7. Update Attempt
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
-    // Force grading if strict time check failed
-    const finalNeedsGrading = hasEssayQuestions || needsManualReview
-
-    // Security: If server detects anomaly (time violation), force a flag in the DB logs
-    const forcedTabSwitches = (activityLog?.tabSwitches || 0) + (needsManualReview ? 5 : 0)
-    const forcedExitAttempts = (activityLog?.exitAttempts || 0) + (needsManualReview ? 1 : 0)
+    // Security: If we suspect anomaly but within time limits (e.g. huge copy paste count), flag it
+    const isFlagged = (activityLog?.tabSwitches || 0) > 10 || (activityLog?.copyPasteCount || 0) > 5
 
     await supabase
       .from("quiz_attempts")
@@ -150,11 +147,11 @@ export async function POST(request: Request) {
         score: totalScore,
         max_score: maxScore,
         percentage: percentage,
-        needs_grading: finalNeedsGrading,
+        needs_grading: hasEssayQuestions || isFlagged,
         completed_at: new Date().toISOString(),
-        tab_switches: forcedTabSwitches,
+        tab_switches: activityLog?.tabSwitches || 0,
         copy_paste_count: activityLog?.copyPasteCount || 0,
-        exit_attempts: forcedExitAttempts
+        exit_attempts: activityLog?.exitAttempts || 0
       })
       .eq("id", attempt.id)
 
@@ -163,8 +160,8 @@ export async function POST(request: Request) {
       score: totalScore,
       maxScore: maxScore,
       percentage: percentage,
-      needsGrading: finalNeedsGrading,
-      flagged: !!flaggingReason
+      needsGrading: hasEssayQuestions || isFlagged,
+      flagged: isFlagged
     })
 
   } catch (error: any) {

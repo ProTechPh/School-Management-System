@@ -85,28 +85,29 @@ export default function TeacherLessonsPage() {
 
     if (classData) setClasses(classData)
 
-    // Fetch lessons
-    const { data: lessonData } = await supabase
-      .from("lessons")
-      .select(`
-        id, title, description, content, class_id, updated_at,
-        class:classes (name),
-        materials:lesson_materials (id, name, type, url)
-      `)
-      .eq("teacher_id", user.id)
-      .order("created_at", { ascending: false })
-
-    if (lessonData) {
-      setLessons(lessonData.map(l => ({
-        id: l.id,
-        title: l.title,
-        description: l.description,
-        content: l.content,
-        class_id: l.class_id,
-        class_name: (l.class as any)?.name || "Unknown",
-        materials: (l.materials as any) || [],
-        updated_at: l.updated_at,
-      })))
+    // Use secure API route
+    try {
+      const response = await fetch("/api/teacher/lessons")
+      if (response.ok) {
+        const { lessons: lessonData } = await response.json()
+        if (lessonData) {
+          setLessons(lessonData.map((l: any) => ({
+            id: l.id,
+            title: l.title,
+            description: l.description,
+            content: l.content,
+            class_id: l.class_id,
+            class_name: l.class?.name || "Unknown",
+            materials: l.materials || [],
+            updated_at: l.updated_at,
+          })))
+        }
+      } else {
+        throw new Error("Failed to fetch lessons")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to load lessons")
     }
 
     setLoading(false)

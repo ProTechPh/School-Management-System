@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
-import { Plus, Clock, Users, FileQuestion, Trash2, Eye, BarChart, UserPlus, CalendarClock, Loader2, Edit3, AlertTriangle, MousePointer, Copy, LogOut } from "lucide-react"
+import { Plus, Clock, Users, FileQuestion, Trash2, Eye, BarChart, UserPlus, CalendarClock, Loader2, Edit3, AlertTriangle, MousePointer, Copy, LogOut, Info } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { useNotificationStore } from "@/lib/notification-store"
@@ -874,9 +874,15 @@ export default function TeacherQuizzesPage() {
                 {/* Activity Summary - Anti-Cheating Indicators */}
                 {attemptActivitySummary && (attemptActivitySummary.tab_switches > 0 || attemptActivitySummary.copy_paste_count > 0 || attemptActivitySummary.exit_attempts > 0) && (
                   <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-500" />
-                      <span className="font-medium text-amber-500 text-sm">Suspicious Activity Detected</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        <span className="font-medium text-amber-500 text-sm">Suspicious Activity Detected</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Info className="h-3 w-3" />
+                        <span>Client-side metrics are indicators only</span>
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-3 text-sm">
                       <div className="flex items-center gap-2">
@@ -901,6 +907,9 @@ export default function TeacherQuizzesPage() {
                         </span>
                       </div>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-2 italic">
+                      Note: These flags are captured by the student's browser and can be bypassed. They should be used as supporting evidence rather than definitive proof of academic dishonesty.
+                    </p>
                     {activityLogs.length > 0 && (
                       <details className="mt-3">
                         <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
