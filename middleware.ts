@@ -40,15 +40,25 @@ export async function middleware(request: NextRequest) {
   const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
   if (user) {
-    // Check role and password status from DB
+    // Check role, password status, and active status from DB
     const { data: userData } = await supabase
       .from("users")
-      .select("role, must_change_password")
+      .select("role, must_change_password, is_active")
       .eq("id", user.id)
       .single()
     
+    // Enforce Account Status
+    if (userData && userData.is_active === false) {
+      // If user is disabled, sign them out (clear cookies) and redirect to login
+      // Since we can't easily clear auth cookies here without a redirect loop or complex logic,
+      // we redirect to login with an error, and the client/login page should handle the session cleanup.
+      // Alternatively, we block access to protected routes.
+      if (isProtected || request.nextUrl.pathname.startsWith("/api/")) {
+         return NextResponse.redirect(new URL("/login?error=account_disabled", request.url))
+      }
+    }
+
     // Enforce Password Change Policy
-    // SECURITY FIX: Removed blanket /api/ exclusion. Now only specific auth endpoints are allowed.
     if (userData?.must_change_password) {
       const isAllowedPath = 
         request.nextUrl.pathname.startsWith("/change-password") ||

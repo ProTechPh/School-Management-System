@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid QR code data" }, { status: 400 })
     }
 
-    // SECURITY FIX: Remove hardcoded fallback. Force environment variable configuration.
+    // Force environment variable configuration
     const secret = process.env.QR_SECRET
     if (!secret) {
       console.error("QR_SECRET is not configured")
@@ -61,12 +61,11 @@ export async function POST(request: Request) {
     }
 
     // Check if QR code is expired
-    // TIGHTENED SECURITY: Reduced validity window to 10s (5s rotation + 5s buffer)
     const now = Date.now()
     const qrAge = now - timestamp
     
     // Allow 10 seconds validity window
-    if (qrAge > 10000 || qrAge < -5000) { // Allow 5s clock skew
+    if (qrAge > 10000 || qrAge < -5000) { 
       return NextResponse.json({ error: "QR code expired. Please scan the current code." }, { status: 400 })
     }
 
@@ -85,7 +84,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Session is not active" }, { status: 400 })
     }
 
-    // 3. Check existing check-in
+    // 3. SECURITY FIX: Verify Enrollment
+    const { data: enrollment } = await supabase
+      .from("class_students")
+      .select("id")
+      .eq("class_id", session.class_id)
+      .eq("student_id", user.id)
+      .single()
+
+    if (!enrollment) {
+      return NextResponse.json({ error: "You are not enrolled in this class." }, { status: 403 })
+    }
+
+    // 4. Check existing check-in
     const { data: existing } = await supabase
       .from("qr_checkins")
       .select("id")
@@ -97,13 +108,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 4. Server-side Location Verification
+    // 5. Server-side Location Verification
     if (session.require_location) {
       if (!latitude || !longitude) {
         return NextResponse.json({ error: "Location required" }, { status: 400 })
       }
 
-      // Fetch school location settings from DB
       const { data: settings } = await supabase
         .from("school_settings")
         .select("latitude, longitude, radius_meters")
@@ -124,7 +134,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 5. Perform Insert
+    // 6. Perform Insert
     const { error: insertError } = await supabase
       .from("qr_checkins")
       .insert({
@@ -135,7 +145,7 @@ export async function POST(request: Request) {
 
     if (insertError) throw insertError
 
-    // 6. Update Attendance Record
+    // 7. Update Attendance Record
     const { data: existingAttendance } = await supabase
       .from("attendance_records")
       .select("id")

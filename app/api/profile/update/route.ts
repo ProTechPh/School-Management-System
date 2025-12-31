@@ -10,31 +10,82 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Get user role
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+
+    const role = userData?.role
     const body = await request.json()
     
-    // Whitelist allowed fields for the 'users' table
-    // Explicitly EXCLUDE 'role', 'is_active', etc.
-    const allowedFields = ["name", "phone", "address", "avatar"]
-    const updates: Record<string, any> = {}
+    // 1. Update Base User Fields (Safe fields only)
+    const allowedUserFields = ["name", "phone", "address", "avatar"]
+    const userUpdates: Record<string, any> = {}
 
-    for (const field of allowedFields) {
+    for (const field of allowedUserFields) {
       if (body[field] !== undefined) {
-        updates[field] = body[field]
+        userUpdates[field] = body[field]
       }
     }
 
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ message: "No valid fields to update" })
+    if (Object.keys(userUpdates).length > 0) {
+      const { error } = await supabase
+        .from("users")
+        .update(userUpdates)
+        .eq("id", user.id)
+
+      if (error) throw error
     }
 
-    // Perform update on users table
-    const { error } = await supabase
-      .from("users")
-      .update(updates)
-      .eq("id", user.id)
+    // 2. Update Role-Specific Fields
+    if (role === "student") {
+      // STRICT Whitelist for Students
+      // Explicitly excluding: grade, section, lrn, enrollment_status, scholarship info
+      const allowedStudentFields = [
+        "contact_number", "email",
+        "current_house_street", "current_barangay", "current_city", "current_province", "current_region",
+        "permanent_same_as_current", "permanent_house_street", "permanent_barangay", "permanent_city", "permanent_province", "permanent_region",
+        "father_contact", "mother_contact", "guardian_contact",
+        "emergency_contact_name", "emergency_contact_number",
+        "medical_conditions", "blood_type"
+      ]
+      
+      const studentUpdates: Record<string, any> = {}
+      for (const field of allowedStudentFields) {
+        if (body[field] !== undefined) {
+          studentUpdates[field] = body[field]
+        }
+      }
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      if (Object.keys(studentUpdates).length > 0) {
+        const { error } = await supabase
+          .from("student_profiles")
+          .update(studentUpdates)
+          .eq("id", user.id)
+        
+        if (error) throw error
+      }
+    } else if (role === "teacher") {
+      // Teachers can update their professional info usually, but we restrict if needed
+      const allowedTeacherFields = ["subject", "department"]
+      const teacherUpdates: Record<string, any> = {}
+      
+      for (const field of allowedTeacherFields) {
+        if (body[field] !== undefined) {
+          teacherUpdates[field] = body[field]
+        }
+      }
+
+      if (Object.keys(teacherUpdates).length > 0) {
+        const { error } = await supabase
+          .from("teacher_profiles")
+          .update(teacherUpdates)
+          .eq("id", user.id)
+        
+        if (error) throw error
+      }
     }
 
     return NextResponse.json({ success: true })

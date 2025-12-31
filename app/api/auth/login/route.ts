@@ -5,7 +5,6 @@ import { loginRateLimit } from "@/lib/rate-limit"
 export async function POST(request: Request) {
   try {
     // Get IP address for rate limiting
-    // In production, you might need to check 'x-forwarded-for' header
     const ip = request.headers.get("x-forwarded-for") || "unknown"
     
     // Check rate limit
@@ -27,6 +26,24 @@ export async function POST(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 401 })
+    }
+
+    if (data.user) {
+      // Check if account is active
+      const { data: userData } = await supabase
+        .from("users")
+        .select("is_active")
+        .eq("id", data.user.id)
+        .single()
+
+      if (userData && userData.is_active === false) {
+        // Sign out immediately
+        await supabase.auth.signOut()
+        return NextResponse.json(
+          { error: "Your account has been disabled. Please contact the administrator." }, 
+          { status: 403 }
+        )
+      }
     }
 
     return NextResponse.json({ user: data.user })
