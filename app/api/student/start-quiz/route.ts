@@ -27,6 +27,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Quiz ID required" }, { status: 400 })
     }
 
+    // Verify quiz availability AND get class_id
+    const { data: quiz } = await supabase
+      .from("quizzes")
+      .select("status, class_id")
+      .eq("id", quizId)
+      .single()
+
+    if (!quiz || quiz.status !== "published") {
+      return NextResponse.json({ error: "Quiz not available" }, { status: 400 })
+    }
+
+    // SECURITY FIX: Verify Student Enrollment (IDOR Prevention)
+    // Check if the student is enrolled in the class associated with this quiz
+    const { data: enrollment } = await supabase
+      .from("class_students")
+      .select("id")
+      .eq("class_id", quiz.class_id)
+      .eq("student_id", user.id)
+      .single()
+
+    if (!enrollment) {
+      return NextResponse.json({ error: "Forbidden: You are not enrolled in this class." }, { status: 403 })
+    }
+
     // Check if attempt already exists
     const { data: existingAttempt } = await supabase
       .from("quiz_attempts")
@@ -39,17 +63,6 @@ export async function POST(request: Request) {
       if (existingAttempt.completed_at) {
         return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 })
       }
-    }
-
-    // Verify quiz availability
-    const { data: quiz } = await supabase
-      .from("quizzes")
-      .select("status")
-      .eq("id", quizId)
-      .single()
-
-    if (!quiz || quiz.status !== "published") {
-      return NextResponse.json({ error: "Quiz not available" }, { status: 400 })
     }
 
     let attemptId = existingAttempt?.id

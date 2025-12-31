@@ -117,8 +117,6 @@ export async function POST(request: Request) {
     }
 
     // 5. SECURITY FIX: Robust Location/Network Verification
-    // Removed client-side GPS fallback which is easily spoofed.
-    // Now strictly enforcing IP-based validation if location is required.
     if (session.require_location) {
       const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
       
@@ -130,7 +128,11 @@ export async function POST(request: Request) {
         }, { status: 500 })
       }
 
-      const clientIp = request.headers.get("x-forwarded-for")?.split(',')[0].trim() || "unknown"
+      // SECURITY FIX: Get the LAST IP in the chain to prevent spoofing via appending
+      // Most proxies append the real IP to the end of the list.
+      const forwardedFor = request.headers.get("x-forwarded-for")
+      const clientIp = forwardedFor ? forwardedFor.split(',').pop()?.trim() || "unknown" : "unknown"
+      
       const allowedList = allowedIps.split(',').map(ip => ip.trim())
       
       // Allow localhost for dev
