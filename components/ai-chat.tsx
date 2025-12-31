@@ -14,6 +14,7 @@ import { Bot, Send, User, Loader2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 type UserRole = "admin" | "teacher" | "student"
 import ReactMarkdown from "react-markdown"
+import rehypeSanitize from "rehype-sanitize"
 
 interface AIChatProps {
   userRole: UserRole
@@ -130,7 +131,7 @@ export function AIChat({ userRole, userName }: AIChatProps) {
                         const cleanedText = part.text.replace(/<think>[\s\S]*?<\/think>/g, "").trim()
                         return (
                           <div key={index} className="prose prose-sm dark:prose-invert prose-p:my-1 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:my-2 prose-headings:font-semibold max-w-none">
-                            <ReactMarkdown>{cleanedText}</ReactMarkdown>
+                            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{cleanedText}</ReactMarkdown>
                           </div>
                         )
                       }

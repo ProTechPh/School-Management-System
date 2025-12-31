@@ -132,121 +132,35 @@ export default function StudentQRCheckinPage() {
       return
     }
 
-    // Get full session details for time-based expiration check
-    const { data: fullSession } = await supabase
-      .from("qr_attendance_sessions")
-      .select("date, end_time")
-      .eq("id", session.id)
-      .single()
-
-    // Check if session is expired (status, date, or end_time)
-    const now = new Date()
-    const today = format(now, "yyyy-MM-dd")
-    const currentTime = format(now, "HH:mm")
-    
-    let isExpired = session.status === "expired"
-    let expirationReason = "This attendance session has expired."
-    
-    if (!isExpired && fullSession) {
-      // Check if session date is in the past
-      if (fullSession.date < today) {
-        isExpired = true
-        expirationReason = "This attendance session has expired (past date)."
-      }
-      // Check if end_time has passed (same day)
-      else if (fullSession.date === today && fullSession.end_time && currentTime > fullSession.end_time) {
-        isExpired = true
-        expirationReason = `This attendance session ended at ${fullSession.end_time}.`
-      }
-    }
-
-    if (isExpired) {
-      setResult({ success: false, message: expirationReason })
-      setSubmitting(false)
-      return
-    }
-
-    // Check if already checked in
-    const { data: existingCheckin } = await supabase
-      .from("qr_checkins")
-      .select("id")
-      .eq("session_id", session.id)
-      .eq("student_id", currentStudent.id)
-      .single()
-
-    if (existingCheckin) {
-      setResult({ success: false, message: "You have already checked in to this session." })
-      setSubmitting(false)
-      return
-    }
-
-    // Check location if required
-    if (session.require_location && !isInRange) {
-      setResult({ 
-        success: false, 
-        message: `You are outside the school area. Distance: ${distance ? Math.round(distance) : "unknown"}m (max: ${schoolLocation.radiusMeters}m)` 
-      })
-      setSubmitting(false)
-      return
-    }
-
-    // Create check-in record
-    const { error: checkinError } = await supabase
-      .from("qr_checkins")
-      .insert({
-        session_id: session.id,
-        student_id: currentStudent.id,
-        location_verified: isInRange || !session.require_location
+    try {
+      // Use the secure API route for check-in
+      const response = await fetch("/api/student/check-in", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId: session.id,
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+        }),
       })
 
-    if (checkinError) {
-      setResult({ success: false, message: "Failed to check in. Please try again." })
-      setSubmitting(false)
-      return
-    }
+      const data = await response.json()
 
-    // Get session details to create attendance record
-    const { data: sessionDetails } = await supabase
-      .from("qr_attendance_sessions")
-      .select("class_id, date")
-      .eq("id", session.id)
-      .single()
-
-    if (sessionDetails) {
-      // Check if attendance record already exists
-      const { data: existingAttendance } = await supabase
-        .from("attendance_records")
-        .select("id")
-        .eq("student_id", currentStudent.id)
-        .eq("class_id", sessionDetails.class_id)
-        .eq("date", sessionDetails.date)
-        .single()
-
-      if (existingAttendance) {
-        // Update existing record to present
-        await supabase
-          .from("attendance_records")
-          .update({ status: "present" })
-          .eq("id", existingAttendance.id)
-      } else {
-        // Create new attendance record
-        await supabase
-          .from("attendance_records")
-          .insert({
-            student_id: currentStudent.id,
-            class_id: sessionDetails.class_id,
-            date: sessionDetails.date,
-            status: "present"
-          })
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to check in")
       }
-    }
 
-    setResult({ success: true, message: `Successfully checked in to ${(session.class as any)?.name}!` })
-    toast.success("Check-in successful!")
-    
-    // Refresh check-ins
-    fetchUser()
-    setSubmitting(false)
+      setResult({ success: true, message: `Successfully checked in to ${(session.class as any)?.name}!` })
+      toast.success("Check-in successful!")
+      fetchUser() // Refresh list
+    } catch (error: any) {
+      setResult({ success: false, message: error.message })
+      toast.error("Check-in failed", { description: error.message })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleManualCheckIn = (e: React.FormEvent) => {
