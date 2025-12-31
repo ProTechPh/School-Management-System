@@ -2,8 +2,14 @@ import { createClient } from "@supabase/supabase-js"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
+import { validateOrigin } from "@/lib/security"
 
 export async function POST(request: NextRequest) {
+  // SECURITY FIX: CSRF Check
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: "Invalid Origin" }, { status: 403 })
+  }
+
   try {
     // 1. Verify the caller is an admin
     const cookieStore = await cookies()
@@ -36,7 +42,6 @@ export async function POST(request: NextRequest) {
     const { email, password, name, role, lrn } = body
 
     // 3. Create user using Service Role (Admin) client
-    // This prevents the current admin session from being invalidated
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,

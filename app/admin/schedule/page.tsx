@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 // Convert 24-hour time to 12-hour format
 const formatTime = (time: string) => {
@@ -47,29 +48,29 @@ export default function SchedulePage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    const { data } = await supabase
-      .from("schedules")
-      .select(`
-        id, day, start_time, end_time, room,
-        class:classes (
-          name, subject,
-          teacher:users!classes_teacher_id_fkey (name)
-        )
-      `)
-      .order("day")
-      .order("start_time")
-
-    if (data) {
-      setSchedules(data.map(s => ({
-        id: s.id,
-        day: s.day,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        room: s.room,
-        class_name: (s.class as any)?.name || "Unknown",
-        subject: (s.class as any)?.subject || "Unknown",
-        teacher_name: (s.class as any)?.teacher?.name || null,
-      })))
+    // Use secure API route
+    try {
+      const response = await fetch("/api/admin/schedule")
+      if (response.ok) {
+        const { schedules: data } = await response.json()
+        if (data) {
+          setSchedules(data.map((s: any) => ({
+            id: s.id,
+            day: s.day,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            room: s.room,
+            class_name: s.class?.name || "Unknown",
+            subject: s.class?.subject || "Unknown",
+            teacher_name: s.class?.teacher?.name || null,
+          })))
+        }
+      } else {
+        throw new Error("Failed to fetch schedule")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to load schedules")
     }
 
     setLoading(false)

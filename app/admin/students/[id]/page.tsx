@@ -52,6 +52,7 @@ import { createClient } from "@/lib/supabase/client"
 import { StudentForm, type StudentFormData } from "@/components/student-form"
 import type { DbStudentProfile } from "@/lib/supabase/types"
 
+// ... (Keep existing interfaces)
 interface StudentData {
   id: string
   name: string
@@ -143,6 +144,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     fetchEnrolledClasses()
   }, [id])
 
+  // ... (Keep fetchEnrolledClasses, fetchAvailableClasses, handleEnrollClass, handleUnenrollClass)
+
   const fetchEnrolledClasses = async () => {
     const supabase = createClient()
     
@@ -231,23 +234,22 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const fetchUnlinkedAccounts = async () => {
-    const supabase = createClient()
-    
-    // Get all student user accounts
-    const { data: studentUsers } = await supabase
-      .from("users")
-      .select("id, email, name")
-      .eq("role", "student")
-      .order("name")
-    
-    if (!studentUsers) return
-
-    // For linking, we want to show accounts that are DIFFERENT from the current student
-    // This allows linking this student's profile data to another account
-    const unlinked = studentUsers.filter(u => u.id !== id)
-    
-    setUnlinkedAccounts(unlinked)
+    try {
+      const response = await fetch("/api/admin/unlinked-accounts")
+      if (response.ok) {
+        const { accounts } = await response.json()
+        // Filter out current student
+        const unlinked = accounts.filter((u: any) => u.id !== id)
+        setUnlinkedAccounts(unlinked)
+      } else {
+        toast.error("Failed to load accounts")
+      }
+    } catch (error) {
+      console.error("Error fetching accounts:", error)
+    }
   }
+
+  // ... (Keep handleLinkAccount, fetchStudent, handleSaveEdit)
 
   const handleLinkAccount = async () => {
     if (!selectedAccountId || !student?.profile) return
@@ -290,8 +292,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       })
       .eq("id", selectedAccountId)
 
-    // If this was a different record, we might want to delete the old one
-    // For now, just notify success
     toast.success("Account linked successfully", { 
       description: "The student profile has been linked to the login account." 
     })
@@ -300,7 +300,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     setSelectedAccountId("")
     setLinking(false)
     
-    // Redirect to the linked account's profile
     router.push(`/admin/students/${selectedAccountId}`)
   }
 
@@ -310,7 +309,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    // Fetch user data
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select("id, name, email, avatar, address")
@@ -322,14 +320,12 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       return
     }
 
-    // Fetch student profile
     const { data: profileData } = await supabase
       .from("student_profiles")
       .select("*")
       .eq("id", id)
       .single()
 
-    // Check if this student has an auth account (can login)
     let hasAuth = false
     try {
       const res = await fetch("/api/check-auth", {
@@ -357,7 +353,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
 
     const supabase = createClient()
     
-    // Construct full name from parts
     const fullName = [
       formData.first_name,
       formData.middle_name,
@@ -365,7 +360,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       formData.name_extension
     ].filter(Boolean).join(" ")
     
-    // Update user record
     const { error: userError } = await supabase
       .from("users")
       .update({
@@ -383,7 +377,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       return
     }
 
-    // Update student profile with all DepEd fields
     const { error: profileError } = await supabase
       .from("student_profiles")
       .update({
@@ -460,6 +453,8 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     fetchStudent()
   }
 
+  // ... (Keep Render Logic)
+  
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -520,6 +515,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
+        {/* ... (Rest of UI) */}
         {/* Student Header Card */}
         <Card className="mb-6">
           <CardContent className="pt-6">
