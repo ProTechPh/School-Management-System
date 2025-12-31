@@ -59,11 +59,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid QR code signature" }, { status: 403 })
     }
 
-    // Check if QR code is expired (Shortened window to 5s to prevent relay attacks)
+    // Check if QR code is expired (Strict 5s window)
     const now = Date.now()
     const qrAge = now - timestamp
     
-    // Strict 5 second window
     if (qrAge > 5000 || qrAge < -2000) { 
       return NextResponse.json({ error: "QR code expired. Please scan the current code." }, { status: 400 })
     }
@@ -107,20 +106,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 5. SECURITY FIX: IP & Location Verification
+    // 5. SECURITY FIX: Robust Location Verification
     if (session.require_location) {
-      // A. IP Address Check (Primary Security Layer)
-      // Check if SCHOOL_IP is configured in environment
+      // A. IP Address Check (Primary Security Layer - Spoof Proof)
+      // If SCHOOL_IP_ADDRESS is configured, we enforce it strictly.
       const allowedIp = process.env.SCHOOL_IP_ADDRESS
+      
       if (allowedIp) {
         const clientIp = request.headers.get("x-forwarded-for")?.split(',')[0] || "unknown"
-        // Allow localhost for testing, otherwise enforce IP match
+        // Allow localhost for dev/testing, otherwise enforce strict IP match
         if (clientIp !== "::1" && clientIp !== "127.0.0.1" && clientIp !== allowedIp) {
-           return NextResponse.json({ error: "You must be connected to the school Wi-Fi to check in." }, { status: 403 })
+           return NextResponse.json({ 
+             error: "Network verification failed. You must be connected to the School Wi-Fi." 
+           }, { status: 403 })
         }
-      }
+      } 
+      // If no IP is configured, we must rely on GPS, but note it is spoofable.
+      // Ideally, admins should configure the IP.
 
-      // B. GPS Check (Secondary Layer - Advisory/Fallback)
+      // B. GPS Check (Secondary Layer)
       if (!latitude || !longitude) {
         return NextResponse.json({ error: "GPS Location is required for this check-in." }, { status: 400 })
       }

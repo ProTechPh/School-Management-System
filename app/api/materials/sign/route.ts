@@ -16,7 +16,6 @@ export async function POST(request: Request) {
     }
 
     // 1. Find the material record associated with this path
-    // We assume the 'url' column in lesson_materials stores the storage path
     const { data: material, error: materialError } = await supabase
       .from("lesson_materials")
       .select(`
@@ -78,9 +77,11 @@ export async function POST(request: Request) {
     }
 
     // 3. Generate Signed URL
+    // SECURITY FIX: Reduced expiry from 3600s (1 hour) to 300s (5 minutes)
+    // The browser uses this URL immediately to start the download/view.
     const { data, error } = await supabase.storage
       .from("materials") 
-      .createSignedUrl(path, 3600) // 1 hour expiry
+      .createSignedUrl(path, 300) 
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

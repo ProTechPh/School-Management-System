@@ -98,9 +98,10 @@ export async function deleteAvatar(filePath: string): Promise<{ success: boolean
 // Function to generate a signed URL for private materials
 export async function getSignedMaterialUrl(path: string): Promise<string | null> {
   const supabase = createClient()
+  // SECURITY FIX: Reduced expiry from 3600s to 300s (5 minutes)
   const { data, error } = await supabase.storage
     .from(MATERIALS_BUCKET)
-    .createSignedUrl(path, 3600) // Valid for 1 hour
+    .createSignedUrl(path, 300) 
 
   if (error) {
     console.error("Error creating signed URL:", error)

@@ -4,7 +4,7 @@ import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: Request) {
   try {
-    // SECURITY FIX: Rate Limiting (Persistent)
+    // Rate Limiting
     const ip = request.headers.get("x-forwarded-for") || "unknown"
     const isAllowed = await checkRateLimit(ip, "submit-quiz", 3, 60 * 1000)
     
@@ -54,12 +54,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Quiz attempt not started." }, { status: 400 })
     }
 
-    // SECURITY FIX: Idempotency check
     if (attempt.completed_at) {
       return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 })
     }
 
-    // 3. Server-Side Time Verification (Primary Trust Source)
+    // 3. Server-Side Time Verification (Trust Source)
     const startTime = new Date(attempt.created_at).getTime()
     const now = Date.now()
     const durationMs = now - startTime
@@ -77,7 +76,6 @@ export async function POST(request: Request) {
     // 4. Validate Due Date
     if (quiz.due_date) {
       const dueDate = new Date(quiz.due_date)
-      // Allow 5 minutes grace period
       if (now > dueDate.getTime() + 5 * 60 * 1000) { 
          const { data: reopen } = await supabase
           .from("quiz_reopens")
@@ -92,20 +90,21 @@ export async function POST(request: Request) {
       }
     }
 
-    // SECURITY FIX: Server-Side Heuristics
-    // If a student finishes impossibly fast (e.g. < 2 seconds per question), flag it.
-    // This cannot be spoofed by the client.
-    const minTimePerQuestionMs = 2000 
+    // SECURITY FIX: Robust Server-Side Heuristics
+    // Calculate "Impossible Speed".
+    // 3 seconds per question is extremely fast for reading + answering.
+    const minTimePerQuestionMs = 3000 
     const minTotalTimeMs = (quiz.questions.length * minTimePerQuestionMs)
+    
+    // If the quiz was completed faster than humanly possible
     const isTooFast = durationMs < minTotalTimeMs
 
     // Sanitize Client Logs (Treat as ADVISORY only)
-    // We record them, but we don't rely on them for automated rejections.
     const clientTabSwitches = typeof activityLog?.tabSwitches === 'number' ? Math.max(0, activityLog.tabSwitches) : 0
     const clientCopyPaste = typeof activityLog?.copyPasteCount === 'number' ? Math.max(0, activityLog.copyPasteCount) : 0
     const clientExitAttempts = typeof activityLog?.exitAttempts === 'number' ? Math.max(0, activityLog.exitAttempts) : 0
 
-    // Combine Server and Client flags
+    // Combine Flags: Prioritize server-side detection
     const isFlagged = isTooFast || 
                       clientTabSwitches > 10 || 
                       clientCopyPaste > 5
@@ -170,7 +169,7 @@ export async function POST(request: Request) {
         score: totalScore,
         max_score: maxScore,
         percentage: percentage,
-        needs_grading: hasEssayQuestions || isFlagged, // Flag for review if suspicious
+        needs_grading: hasEssayQuestions || isFlagged, // Auto-flag for review if suspicious
         completed_at: new Date().toISOString(),
         tab_switches: clientTabSwitches,
         copy_paste_count: clientCopyPaste,
