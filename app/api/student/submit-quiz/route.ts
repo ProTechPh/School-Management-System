@@ -4,7 +4,7 @@ import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: Request) {
   try {
-    // SECURITY FIX: Rate Limiting (In-Memory)
+    // SECURITY FIX: Rate Limiting (Persistent)
     const ip = request.headers.get("x-forwarded-for") || "unknown"
     const isAllowed = await checkRateLimit(ip, "submit-quiz", 3, 60 * 1000)
     
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 })
     }
 
-    // 3. Server-Side Time Verification
+    // 3. Server-Side Time Verification (Primary Trust Source)
     const startTime = new Date(attempt.created_at).getTime()
     const now = Date.now()
     const durationMs = now - startTime
@@ -94,11 +94,13 @@ export async function POST(request: Request) {
 
     // SECURITY FIX: Server-Side Heuristics
     // If a student finishes impossibly fast (e.g. < 2 seconds per question), flag it.
+    // This cannot be spoofed by the client.
     const minTimePerQuestionMs = 2000 
     const minTotalTimeMs = (quiz.questions.length * minTimePerQuestionMs)
     const isTooFast = durationMs < minTotalTimeMs
 
-    // Sanitize Client Logs (Treat as advisory)
+    // Sanitize Client Logs (Treat as ADVISORY only)
+    // We record them, but we don't rely on them for automated rejections.
     const clientTabSwitches = typeof activityLog?.tabSwitches === 'number' ? Math.max(0, activityLog.tabSwitches) : 0
     const clientCopyPaste = typeof activityLog?.copyPasteCount === 'number' ? Math.max(0, activityLog.copyPasteCount) : 0
     const clientExitAttempts = typeof activityLog?.exitAttempts === 'number' ? Math.max(0, activityLog.exitAttempts) : 0
@@ -168,7 +170,7 @@ export async function POST(request: Request) {
         score: totalScore,
         max_score: maxScore,
         percentage: percentage,
-        needs_grading: hasEssayQuestions || isFlagged,
+        needs_grading: hasEssayQuestions || isFlagged, // Flag for review if suspicious
         completed_at: new Date().toISOString(),
         tab_switches: clientTabSwitches,
         copy_paste_count: clientCopyPaste,

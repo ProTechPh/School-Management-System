@@ -1,48 +1,69 @@
-import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
-interface RateLimitContext {
-  count: number
-  resetAt: number
-}
-
-// In-memory store for rate limiting
-// Note: In a serverless environment (like Vercel), this cache is per-lambda instance.
-// While it doesn't provide a strict global limit, it effectively prevents
-// single-source flooding attacks from exhausting database connections.
-const ipCache = new Map<string, RateLimitContext>()
-
-// Clean up expired entries every 5 minutes to prevent memory leaks
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, context] of ipCache.entries()) {
-    if (now > context.resetAt) {
-      ipCache.delete(key)
-    }
+// Use Service Role Key for rate limiting to bypass RLS and ensure system-level access
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
   }
-}, 5 * 60 * 1000)
+)
 
 export async function checkRateLimit(identifier: string, endpoint: string, limit: number, windowMs: number): Promise<boolean> {
   const now = Date.now()
   const key = `${identifier}:${endpoint}`
   
-  const context = ipCache.get(key)
+  try {
+    // 1. Get current limit for this key
+    const { data, error } = await supabaseAdmin
+      .from('rate_limits')
+      .select('count, last_request')
+      .eq('key', key)
+      .single()
 
-  // If no record or expired, reset
-  if (!context || now > context.resetAt) {
-    ipCache.set(key, {
-      count: 1,
-      resetAt: now + windowMs
-    })
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows found"
+      console.error("Rate limit fetch error:", error)
+      return true // Fail open if DB error to prevent blocking users
+    }
+
+    if (!data) {
+      // First request
+      await supabaseAdmin.from('rate_limits').insert({
+        key,
+        count: 1,
+        last_request: now
+      })
+      return true
+    }
+
+    // 2. Check window
+    if (now - data.last_request > windowMs) {
+      // Window expired, reset
+      await supabaseAdmin
+        .from('rate_limits')
+        .update({ count: 1, last_request: now })
+        .eq('key', key)
+      return true
+    }
+
+    // 3. Check limit
+    if (data.count >= limit) {
+      return false
+    }
+
+    // 4. Increment
+    await supabaseAdmin
+      .from('rate_limits')
+      .update({ count: data.count + 1 })
+      .eq('key', key)
+
     return true
-  }
 
-  // Increment count
-  context.count += 1
-  
-  // Check limit
-  if (context.count > limit) {
-    return false
+  } catch (err) {
+    console.error("Rate limit unexpected error:", err)
+    return true // Fail open
   }
-
-  return true
 }

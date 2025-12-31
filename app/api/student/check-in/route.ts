@@ -59,12 +59,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid QR code signature" }, { status: 403 })
     }
 
-    // Check if QR code is expired
+    // Check if QR code is expired (Shortened window to 5s to prevent relay attacks)
     const now = Date.now()
     const qrAge = now - timestamp
     
-    // Allow 10 seconds validity window
-    if (qrAge > 10000 || qrAge < -5000) { 
+    // Strict 5 second window
+    if (qrAge > 5000 || qrAge < -2000) { 
       return NextResponse.json({ error: "QR code expired. Please scan the current code." }, { status: 400 })
     }
 
@@ -107,12 +107,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 5. Strict Location Verification (Fix: Enforce GPS)
+    // 5. SECURITY FIX: IP & Location Verification
     if (session.require_location) {
-      // We always require GPS coordinates if location check is enabled.
-      // IP check can be added here as an *additional* constraint if needed,
-      // but strictly relying on IP allows spoofing.
-      
+      // A. IP Address Check (Primary Security Layer)
+      // Check if SCHOOL_IP is configured in environment
+      const allowedIp = process.env.SCHOOL_IP_ADDRESS
+      if (allowedIp) {
+        const clientIp = request.headers.get("x-forwarded-for")?.split(',')[0] || "unknown"
+        // Allow localhost for testing, otherwise enforce IP match
+        if (clientIp !== "::1" && clientIp !== "127.0.0.1" && clientIp !== allowedIp) {
+           return NextResponse.json({ error: "You must be connected to the school Wi-Fi to check in." }, { status: 403 })
+        }
+      }
+
+      // B. GPS Check (Secondary Layer - Advisory/Fallback)
       if (!latitude || !longitude) {
         return NextResponse.json({ error: "GPS Location is required for this check-in." }, { status: 400 })
       }
