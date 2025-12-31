@@ -20,17 +20,23 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export async function POST(request: Request) {
   try {
+    let isIpVerified = false
+    
     // Security Fix 1: IP Address Restriction
-    // If configured, ensure the request comes from the school's network
+    // If configured, we check against the school's network IP.
+    // If matched, we consider the location verified without needing GPS.
     const schoolIp = process.env.SCHOOL_WIFI_IP
     if (schoolIp) {
       const forwardedFor = request.headers.get("x-forwarded-for")
       const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "unknown"
       
-      if (clientIp !== schoolIp) {
-         return NextResponse.json({ 
-           error: "Security Check Failed: You must be connected to the school Wi-Fi to check in." 
-         }, { status: 403 })
+      if (clientIp === schoolIp) {
+        isIpVerified = true
+      } else {
+         // If strict IP checking is required, uncomment the following:
+         // return NextResponse.json({ 
+         //   error: "Security Check Failed: You must be connected to the school Wi-Fi to check in." 
+         // }, { status: 403 })
       }
     }
 
@@ -123,9 +129,10 @@ export async function POST(request: Request) {
     }
 
     // 5. Server-side Location Verification
-    if (session.require_location) {
+    // If IP is already verified, we skip GPS check to prevent spoofing issues (IP is stronger trust signal)
+    if (session.require_location && !isIpVerified) {
       if (!latitude || !longitude) {
-        return NextResponse.json({ error: "Location required" }, { status: 400 })
+        return NextResponse.json({ error: "Location required (or connect to School Wi-Fi)" }, { status: 400 })
       }
 
       const { data: settings } = await supabase

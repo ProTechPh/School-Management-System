@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { validateOrigin } from "@/lib/security"
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -7,6 +8,20 @@ export async function middleware(request: NextRequest) {
       headers: request.headers,
     },
   })
+
+  // SECURITY FIX: Global CSRF Protection
+  // Enforce Origin validation for all state-changing API requests
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    const method = request.method.toUpperCase()
+    if (["POST", "PUT", "DELETE", "PATCH"].includes(method)) {
+      if (!validateOrigin(request)) {
+        return new NextResponse(
+          JSON.stringify({ error: "Invalid Origin" }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        )
+      }
+    }
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,10 +64,6 @@ export async function middleware(request: NextRequest) {
     
     // Enforce Account Status
     if (userData && userData.is_active === false) {
-      // If user is disabled, sign them out (clear cookies) and redirect to login
-      // Since we can't easily clear auth cookies here without a redirect loop or complex logic,
-      // we redirect to login with an error, and the client/login page should handle the session cleanup.
-      // Alternatively, we block access to protected routes.
       if (isProtected || request.nextUrl.pathname.startsWith("/api/")) {
          return NextResponse.redirect(new URL("/login?error=account_disabled", request.url))
       }
@@ -64,7 +75,6 @@ export async function middleware(request: NextRequest) {
         request.nextUrl.pathname.startsWith("/change-password") ||
         request.nextUrl.pathname.startsWith("/_next/") ||
         request.nextUrl.pathname === "/favicon.ico" ||
-        // Allow auth related APIs needed for password change/logout
         request.nextUrl.pathname.startsWith("/api/auth")
 
       if (!isAllowedPath) {
@@ -84,7 +94,6 @@ export async function middleware(request: NextRequest) {
       if (request.nextUrl.pathname.startsWith("/student") && role !== "student") {
         return NextResponse.redirect(new URL("/", request.url))
       }
-      // /test-supabase is restricted to admins only for extra security
       if (request.nextUrl.pathname.startsWith("/test-supabase") && role !== "admin") {
         return NextResponse.redirect(new URL("/", request.url))
       }
@@ -105,6 +114,6 @@ export const config = {
     "/test-supabase/:path*",
     "/change-password",
     "/login",
-    "/api/:path*" // Include API routes in matcher to ensure enforcement
+    "/api/:path*"
   ],
 }

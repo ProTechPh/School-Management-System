@@ -100,6 +100,7 @@ export async function POST(request: Request) {
     const minTotalTimeMs = quiz.questions.length * minTimePerQuestionMs
     
     // Flag if completion time is suspiciously fast
+    // This is a hard metric calculated on the server that cannot be bypassed by client manipulation
     const isTooFast = durationMs < minTotalTimeMs
 
     // 5. Grade Answers
@@ -157,14 +158,16 @@ export async function POST(request: Request) {
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
     // SECURITY FIX: Treat client logs as weak signals.
-    // We store them for reference, but rely on server metrics (isTooFast) for hard flags.
+    // We store them for reference, but the server-side `isTooFast` metric is the primary
+    // trusted signal for flagging.
     const clientTabSwitches = typeof activityLog?.tabSwitches === 'number' ? activityLog.tabSwitches : 0
     const clientCopyPaste = typeof activityLog?.copyPasteCount === 'number' ? activityLog.copyPasteCount : 0
     const clientExitAttempts = typeof activityLog?.exitAttempts === 'number' ? activityLog.exitAttempts : 0
 
-    const isFlagged = clientTabSwitches > 10 || 
-                      clientCopyPaste > 5 ||
-                      isTooFast
+    // Flag logic: If server detects speed anomaly OR client reports high activity
+    const isFlagged = isTooFast || 
+                      clientTabSwitches > 10 || 
+                      clientCopyPaste > 5
 
     await supabase
       .from("quiz_attempts")
