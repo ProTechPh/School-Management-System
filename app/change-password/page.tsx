@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { GraduationCap, Loader2, Eye, EyeOff, KeyRound } from "lucide-react"
+import { GraduationCap, Loader2, Eye, EyeOff, KeyRound, Check, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 export default function ChangePasswordPage() {
@@ -19,6 +19,12 @@ export default function ChangePasswordPage() {
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState("")
   const [userRole, setUserRole] = useState<string | null>(null)
+
+  // Password requirements
+  const hasMinLength = newPassword.length >= 8
+  const hasNumber = /\d/.test(newPassword)
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword)
+  const isMatch = newPassword && newPassword === confirmPassword
 
   useEffect(() => {
     checkUser()
@@ -54,8 +60,9 @@ export default function ChangePasswordPage() {
     e.preventDefault()
     setError("")
 
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters")
+    // Strict Validation
+    if (!hasMinLength || !hasNumber) {
+      setError("Password does not meet complexity requirements.")
       return
     }
 
@@ -118,7 +125,7 @@ export default function ChangePasswordPage() {
           </div>
           <CardTitle className="text-2xl">Change Your Password</CardTitle>
           <CardDescription>
-            For security, you must change your password before continuing.
+            For security, you must create a strong password.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -133,7 +140,6 @@ export default function ChangePasswordPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  minLength={6}
                 />
                 <Button
                   type="button"
@@ -145,7 +151,25 @@ export default function ChangePasswordPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              
+              {/* Password Requirements List */}
+              <div className="text-xs space-y-1 mt-2 p-3 bg-muted/50 rounded-lg">
+                <p className="font-medium text-muted-foreground mb-2">Password Requirements:</p>
+                <div className={`flex items-center gap-2 ${hasMinLength ? "text-green-600" : "text-muted-foreground"}`}>
+                  {hasMinLength ? <Check className="h-3 w-3" /> : <div className="h-1.5 w-1.5 rounded-full bg-current ml-1" />}
+                  At least 8 characters
+                </div>
+                <div className={`flex items-center gap-2 ${hasNumber ? "text-green-600" : "text-muted-foreground"}`}>
+                  {hasNumber ? <Check className="h-3 w-3" /> : <div className="h-1.5 w-1.5 rounded-full bg-current ml-1" />}
+                  At least one number
+                </div>
+                <div className={`flex items-center gap-2 ${hasSpecial ? "text-green-600" : "text-muted-foreground"}`}>
+                  {hasSpecial ? <Check className="h-3 w-3" /> : <div className="h-1.5 w-1.5 rounded-full bg-current ml-1" />}
+                  At least one special character (recommended)
+                </div>
+              </div>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
               <Input
@@ -155,16 +179,25 @@ export default function ChangePasswordPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                className={confirmPassword && !isMatch ? "border-destructive" : ""}
               />
+              {confirmPassword && !isMatch && (
+                <p className="text-xs text-destructive">Passwords do not match</p>
+              )}
             </div>
 
             {error && (
-              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
+              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg flex items-center gap-2">
+                <X className="h-4 w-4" />
                 {error}
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading || !hasMinLength || !hasNumber || !isMatch}
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -175,10 +208,6 @@ export default function ChangePasswordPage() {
               )}
             </Button>
           </form>
-
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            Password must be at least 6 characters long.
-          </p>
         </CardContent>
       </Card>
     </div>

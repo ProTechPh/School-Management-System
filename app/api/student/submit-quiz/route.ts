@@ -49,18 +49,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 })
     }
 
-    // 3. Server-Side Time Verification (Strict)
+    // 3. Server-Side Time Verification
     const startTime = new Date(attempt.created_at).getTime()
     const now = Date.now()
     const durationMinutes = (now - startTime) / 1000 / 60
+    const durationMs = now - startTime
     
     // Allow a small buffer (2 minutes) for network latency
     const allowedDuration = quiz.duration + 2 
 
     if (durationMinutes > allowedDuration) {
-      // SECURITY FIX: Strictly reject submissions that exceed the time limit
-      // Instead of just flagging, we reject the submission or force auto-submit with 0 score for unanswered
-      // Here we reject to force student to contact teacher, preventing cheat submissions
       return NextResponse.json({ 
         error: "Time limit exceeded. Your submission was rejected." 
       }, { status: 403 })
@@ -69,7 +67,6 @@ export async function POST(request: Request) {
     // 4. Validate Due Date
     if (quiz.due_date) {
       const dueDate = new Date(quiz.due_date)
-      // Allow 5 min buffer for due date
       if (now > dueDate.getTime() + 5 * 60 * 1000) { 
          const { data: reopen } = await supabase
           .from("quiz_reopens")
@@ -83,6 +80,14 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    // Security Fix 3: Server-Side Heuristics
+    // Check for impossible completion speeds (e.g., < 2 seconds per question)
+    const minTimePerQuestionMs = 2000 // 2 seconds
+    const minTotalTimeMs = quiz.questions.length * minTimePerQuestionMs
+    
+    // Flag if completion time is suspiciously fast
+    const isTooFast = durationMs < minTotalTimeMs
 
     // 5. Grade Answers
     let totalScore = 0
@@ -138,8 +143,10 @@ export async function POST(request: Request) {
     // 7. Update Attempt
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
-    // Security: If we suspect anomaly but within time limits (e.g. huge copy paste count), flag it
-    const isFlagged = (activityLog?.tabSwitches || 0) > 10 || (activityLog?.copyPasteCount || 0) > 5
+    // Combine client-reported flags with server-side heuristic
+    const isFlagged = (activityLog?.tabSwitches || 0) > 10 || 
+                      (activityLog?.copyPasteCount || 0) > 5 ||
+                      isTooFast
 
     await supabase
       .from("quiz_attempts")

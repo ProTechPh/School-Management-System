@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 
 export async function POST(request: Request) {
@@ -29,8 +30,6 @@ export async function POST(request: Request) {
       if (existingAttempt.completed_at) {
         return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 })
       }
-      // If continuing an attempt, we also need to return questions
-      // In a real app, we might check if they are allowed to resume
     }
 
     // Verify quiz availability
@@ -47,7 +46,7 @@ export async function POST(request: Request) {
     let attemptId = existingAttempt?.id
 
     if (!existingAttempt) {
-      // Create new attempt (this sets created_at which acts as start_time)
+      // Create new attempt
       const { data: newAttempt, error } = await supabase
         .from("quiz_attempts")
         .insert({
@@ -57,7 +56,6 @@ export async function POST(request: Request) {
           max_score: 0,
           percentage: 0,
           needs_grading: true,
-          // created_at is set automatically by DB default
         })
         .select("id")
         .single()
@@ -66,8 +64,16 @@ export async function POST(request: Request) {
       attemptId = newAttempt.id
     }
 
-    // Security Fix: Fetch questions only now
-    const { data: questions, error: qError } = await supabase
+    // Security Fix 2: Use Service Role to fetch questions
+    // This allows us to disable SELECT permissions on quiz_questions for the student role in RLS
+    // to prevent students from querying the table directly in the browser console.
+    const supabaseAdmin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const { data: questions, error: qError } = await supabaseAdmin
       .from("quiz_questions")
       .select("id, question, type, options, points, sort_order")
       .eq("quiz_id", quizId)
@@ -75,7 +81,7 @@ export async function POST(request: Request) {
 
     if (qError) throw qError
 
-    // Sanitize questions (ensure no correct answers leaked)
+    // Sanitize questions (ensure no correct answers leaked, though select above already filters)
     const sanitizedQuestions = questions.map(q => ({
       id: q.id,
       question: q.question,

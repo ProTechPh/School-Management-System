@@ -20,6 +20,20 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export async function POST(request: Request) {
   try {
+    // Security Fix 1: IP Address Restriction
+    // If configured, ensure the request comes from the school's network
+    const schoolIp = process.env.SCHOOL_WIFI_IP
+    if (schoolIp) {
+      const forwardedFor = request.headers.get("x-forwarded-for")
+      const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "unknown"
+      
+      if (clientIp !== schoolIp) {
+         return NextResponse.json({ 
+           error: "Security Check Failed: You must be connected to the school Wi-Fi to check in." 
+         }, { status: 403 })
+      }
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -84,7 +98,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Session is not active" }, { status: 400 })
     }
 
-    // 3. SECURITY FIX: Verify Enrollment
+    // 3. Verify Enrollment
     const { data: enrollment } = await supabase
       .from("class_students")
       .select("id")
