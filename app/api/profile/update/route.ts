@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validationResult.error.errors[0].message }, { status: 400 })
     }
 
+    // Use validated data which strips unknown fields
     const validatedData = validationResult.data
     
     // 1. Update Base User Fields (Safe fields only)
@@ -69,11 +70,10 @@ export async function POST(request: NextRequest) {
       
       const studentUpdates: Record<string, any> = {}
       for (const field of allowedStudentFields) {
-        // Since we used passthrough() in zod, these fields are available in body/validatedData
-        // We trust them if they are simple strings/booleans, but ideally we'd validate them specifically too.
-        // For simplicity, we just check existence in the raw body as Zod's passthrough keeps them.
-        if (body[field] !== undefined) {
-          studentUpdates[field] = body[field]
+        // Use validatedData to ensure length limits are respected
+        const val = validatedData[field as keyof typeof validatedData]
+        if (val !== undefined) {
+          studentUpdates[field] = val
         }
       }
 
@@ -90,8 +90,9 @@ export async function POST(request: NextRequest) {
       const teacherUpdates: Record<string, any> = {}
       
       for (const field of allowedTeacherFields) {
-        if (body[field] !== undefined) {
-          teacherUpdates[field] = body[field]
+        const val = validatedData[field as keyof typeof validatedData]
+        if (val !== undefined) {
+          teacherUpdates[field] = val
         }
       }
 

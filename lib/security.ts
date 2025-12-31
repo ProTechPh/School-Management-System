@@ -30,14 +30,38 @@ export function validateOrigin(request: NextRequest): boolean {
 
 /**
  * Zod schema for user profile updates.
- * Prevents extremely long strings and impersonation attempts.
+ * SECURITY FIX: Explicitly defined fields with max lengths. No passthrough.
  */
 export const profileUpdateSchema = z.object({
-  name: z.string().min(2).max(50).regex(/^[a-zA-Z0-9\s\.\-]+$/, "Name contains invalid characters").refine(val => !val.toLowerCase().includes("admin"), "Invalid name").optional(),
+  // Base User Fields
+  name: z.string().min(2).max(100).regex(/^[a-zA-Z0-9\s\.\-]+$/, "Name contains invalid characters").refine(val => !val.toLowerCase().includes("admin"), "Invalid name").optional(),
   phone: z.string().max(20).optional().nullable(),
   address: z.string().max(200).optional().nullable(),
-  // Add other fields as necessary, keeping them strict
+  avatar: z.string().max(500).optional().nullable(), // URL
+
+  // Student Fields
   contact_number: z.string().max(20).optional().nullable(),
-  current_house_street: z.string().max(100).optional().nullable(),
-  // ... allow other specific fields broadly but with length limits
-}).passthrough() // Allow other fields to pass through for specific role logic, but validate common ones
+  email: z.string().email().max(100).optional().nullable(),
+  current_house_street: z.string().max(150).optional().nullable(),
+  current_barangay: z.string().max(100).optional().nullable(),
+  current_city: z.string().max(100).optional().nullable(),
+  current_province: z.string().max(100).optional().nullable(),
+  current_region: z.string().max(100).optional().nullable(),
+  permanent_same_as_current: z.boolean().optional(),
+  permanent_house_street: z.string().max(150).optional().nullable(),
+  permanent_barangay: z.string().max(100).optional().nullable(),
+  permanent_city: z.string().max(100).optional().nullable(),
+  permanent_province: z.string().max(100).optional().nullable(),
+  permanent_region: z.string().max(100).optional().nullable(),
+  father_contact: z.string().max(20).optional().nullable(),
+  mother_contact: z.string().max(20).optional().nullable(),
+  guardian_contact: z.string().max(20).optional().nullable(),
+  emergency_contact_name: z.string().max(100).optional().nullable(),
+  emergency_contact_number: z.string().max(20).optional().nullable(),
+  medical_conditions: z.string().max(500).optional().nullable(),
+  blood_type: z.string().max(10).optional().nullable(),
+
+  // Teacher Fields
+  subject: z.string().max(100).optional(),
+  department: z.string().max(100).optional(),
+})

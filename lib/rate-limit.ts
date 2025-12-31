@@ -1,3 +1,4 @@
+import 'server-only'
 import { createClient } from "@supabase/supabase-js"
 
 // Use Service Role Key for rate limiting to bypass RLS and ensure system-level access
@@ -26,7 +27,8 @@ export async function checkRateLimit(identifier: string, endpoint: string, limit
 
     if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows found"
       console.error("Rate limit fetch error:", error)
-      return true // Fail open if DB error to prevent blocking users
+      // SECURITY FIX: Fail closed on DB error to prevent brute-force attacks during outages
+      return false 
     }
 
     if (!data) {
@@ -64,6 +66,7 @@ export async function checkRateLimit(identifier: string, endpoint: string, limit
 
   } catch (err) {
     console.error("Rate limit unexpected error:", err)
-    return true // Fail open
+    // SECURITY FIX: Fail closed on unexpected errors
+    return false 
   }
 }

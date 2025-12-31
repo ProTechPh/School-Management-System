@@ -2,22 +2,6 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 
-// Haversine formula to calculate distance
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371e3 // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180
-  const φ2 = (lat2 * Math.PI) / 180
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180
-
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-  return R * c
-}
-
 // Helper to parse IPv4 to unsigned 32-bit integer
 function ipV4ToNumber(ip: string): number {
   const parts = ip.split('.').map(Number);
@@ -54,7 +38,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { qrData, latitude, longitude } = body
+    const { qrData } = body
 
     // 1. Decode and Validate QR Data
     let payload
@@ -133,52 +117,32 @@ export async function POST(request: Request) {
     }
 
     // 5. SECURITY FIX: Robust Location/Network Verification
+    // Removed client-side GPS fallback which is easily spoofed.
+    // Now strictly enforcing IP-based validation if location is required.
     if (session.require_location) {
       const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
       
-      // A. IP Address Check (Primary Security Layer)
-      // If SCHOOL_IP_ADDRESS is configured, we enforce it strictly.
-      if (allowedIps) {
-        const clientIp = request.headers.get("x-forwarded-for")?.split(',')[0].trim() || "unknown"
-        const allowedList = allowedIps.split(',').map(ip => ip.trim())
-        
-        // Allow localhost for dev
-        const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
-        
-        // Check if IP matches any allowed IP or CIDR
-        const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
+      if (!allowedIps) {
+        // Fail securely if configuration is missing but security is requested
+        console.error("Security Misconfiguration: SCHOOL_IP_ADDRESS not set but location required.")
+        return NextResponse.json({ 
+          error: "System configuration error: Location verification is required but not configured. Please contact administrator." 
+        }, { status: 500 })
+      }
 
-        if (!isAllowed) {
-           return NextResponse.json({ 
-             error: "Network verification failed. You must be connected to the School Wi-Fi." 
-           }, { status: 403 })
-        }
-        // If IP check passes, we consider location verified.
-      } 
-      // B. GPS Check (Fallback only if IP is NOT configured)
-      else {
-        if (!latitude || !longitude) {
-          return NextResponse.json({ error: "GPS Location is required for this check-in." }, { status: 400 })
-        }
+      const clientIp = request.headers.get("x-forwarded-for")?.split(',')[0].trim() || "unknown"
+      const allowedList = allowedIps.split(',').map(ip => ip.trim())
+      
+      // Allow localhost for dev
+      const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
+      
+      // Check if IP matches any allowed IP or CIDR
+      const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
 
-        const { data: settings } = await supabase
-          .from("school_settings")
-          .select("latitude, longitude, radius_meters")
-          .single()
-
-        const schoolLocation = {
-          latitude: settings?.latitude || 14.5995,
-          longitude: settings?.longitude || 120.9842,
-          radiusMeters: settings?.radius_meters || 500
-        }
-
-        const distance = calculateDistance(latitude, longitude, schoolLocation.latitude, schoolLocation.longitude)
-        
-        if (distance > schoolLocation.radiusMeters) {
+      if (!isAllowed) {
           return NextResponse.json({ 
-            error: `Location check failed. You are ${Math.round(distance)}m away (max ${schoolLocation.radiusMeters}m).` 
-          }, { status: 400 })
-        }
+            error: "Network verification failed. You must be connected to the School Wi-Fi to check in." 
+          }, { status: 403 })
       }
     }
 
