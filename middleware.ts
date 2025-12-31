@@ -75,7 +75,6 @@ export const config = {
     "/admin/:path*",
     "/teacher/:path*",
     "/student/:path*",
-    "/login",
-    "/setup"
+    "/login"
   ],
 }
