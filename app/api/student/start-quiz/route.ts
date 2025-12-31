@@ -1,16 +1,15 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
-import { rateLimit } from "@/lib/rate-limit"
-
-// Limit starting quizzes to 5 per minute to prevent spam
-const startQuizLimiter = rateLimit(5, 60 * 1000)
+import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: Request) {
   try {
     // SECURITY FIX: Rate Limiting
     const ip = request.headers.get("x-forwarded-for") || "unknown"
-    if (!startQuizLimiter.check(ip)) {
+    const isAllowed = await checkRateLimit(ip, "start-quiz", 5, 60 * 1000)
+    
+    if (!isAllowed) {
       return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
     }
 
@@ -75,8 +74,6 @@ export async function POST(request: Request) {
     }
 
     // Security Fix 2: Use Service Role to fetch questions
-    // This allows us to disable SELECT permissions on quiz_questions for the student role in RLS
-    // to prevent students from querying the table directly in the browser console.
     const supabaseAdmin = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -91,7 +88,7 @@ export async function POST(request: Request) {
 
     if (qError) throw qError
 
-    // Sanitize questions (ensure no correct answers leaked, though select above already filters)
+    // Sanitize questions
     const sanitizedQuestions = questions.map(q => ({
       id: q.id,
       question: q.question,

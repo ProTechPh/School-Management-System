@@ -1,13 +1,10 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { consumeStream, convertToModelMessages, streamText, type UIMessage } from "ai"
 import { createClient } from "@/lib/supabase/server"
-import { rateLimit } from "@/lib/rate-limit"
+import { checkRateLimit } from "@/lib/rate-limit"
 import { NextResponse } from "next/server"
 
 export const maxDuration = 30
-
-// 10 messages per minute per user/IP
-const chatLimiter = rateLimit(10, 60 * 1000)
 
 const provider = createOpenAICompatible({
   baseURL: process.env.OPENAI_BASE_URL || "http://localhost:8045/v1",
@@ -20,12 +17,13 @@ const provider = createOpenAICompatible({
 export async function POST(req: Request) {
   // SECURITY FIX: Rate Limiting
   const ip = req.headers.get("x-forwarded-for") || "unknown"
-  if (!chatLimiter.check(ip)) {
+  const isAllowed = await checkRateLimit(ip, "chat", 10, 60 * 1000)
+  
+  if (!isAllowed) {
     return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
   }
 
   // SECURITY FIX: Verify authentication and fetch user details server-side
-  // instead of trusting client-provided context
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

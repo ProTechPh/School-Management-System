@@ -1,43 +1,36 @@
-// Simple in-memory rate limiter
-// Note: In a serverless environment (like Vercel), this state might reset frequently.
-// For production, use Redis (e.g., @upstash/ratelimit).
+import { createClient } from "@/lib/supabase/server"
 
-type RateLimitStore = Map<string, { count: number; lastReset: number }>
+export async function checkRateLimit(identifier: string, endpoint: string, limit: number, windowMs: number): Promise<boolean> {
+  const supabase = await createClient()
+  const windowStart = new Date(Date.now() - windowMs).toISOString()
 
-const globalStore: RateLimitStore = new Map()
+  // 1. Clean up old records (optional optimization: move to a cron job or scheduled function)
+  // We do a cleanup occasionally to prevent table bloat, or just filter in the count query
+  
+  // 2. Count requests in the window
+  const { count, error } = await supabase
+    .from("rate_limits")
+    .select("*", { count: "exact", head: true })
+    .eq("identifier", identifier)
+    .eq("endpoint", endpoint)
+    .gt("created_at", windowStart)
 
-export const rateLimit = (limit: number, windowMs: number) => {
-  return {
-    check: (identifier: string) => {
-      const now = Date.now()
-      const record = globalStore.get(identifier)
-
-      if (!record) {
-        globalStore.set(identifier, { count: 1, lastReset: now })
-        return true
-      }
-
-      if (now - record.lastReset > windowMs) {
-        globalStore.set(identifier, { count: 1, lastReset: now })
-        return true
-      }
-
-      if (record.count >= limit) {
-        return false
-      }
-
-      record.count++
-      return true
-    },
-    cleanup: () => {
-      const now = Date.now()
-      for (const [key, record] of globalStore.entries()) {
-        if (now - record.lastReset > windowMs) {
-          globalStore.delete(key)
-        }
-      }
-    }
+  if (error) {
+    console.error("Rate limit check failed:", error)
+    return true // Fail open to avoid blocking legitimate users on DB error
   }
-}
 
-export const loginRateLimit = rateLimit(5, 60 * 1000) // 5 attempts per minute
+  if ((count || 0) >= limit) {
+    return false
+  }
+
+  // 3. Log this request
+  // We use the service role key or ensure RLS allows insertion if using a client context
+  // Here we assume the server client has permissions
+  await supabase.from("rate_limits").insert({
+    identifier,
+    endpoint
+  })
+
+  return true
+}

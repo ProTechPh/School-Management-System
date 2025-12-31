@@ -1,14 +1,16 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { loginRateLimit } from "@/lib/rate-limit"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: Request) {
   try {
     // Get IP address for rate limiting
     const ip = request.headers.get("x-forwarded-for") || "unknown"
     
-    // Check rate limit
-    if (!loginRateLimit.check(ip)) {
+    // Check rate limit (5 attempts per minute)
+    const isAllowed = await checkRateLimit(ip, "login", 5, 60 * 1000)
+    
+    if (!isAllowed) {
       return NextResponse.json(
         { error: "Too many login attempts. Please try again later." },
         { status: 429 }

@@ -20,7 +20,6 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Plus, Search, Eye, EyeOff, UserPlus, Users, GraduationCap, Shield, Loader2, Copy, Check, Ban, CheckCircle } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 import { useNotificationStore } from "@/lib/notification-store"
 
 interface UserAccount {
@@ -44,13 +43,11 @@ export default function UsersPage() {
   const [createdUser, setCreatedUser] = useState<{ email: string; password: string } | null>(null)
   const { addNotification } = useNotificationStore()
 
-  // Fetch existing users on mount
   useEffect(() => {
     fetchUsers()
   }, [])
 
   const fetchUsers = async () => {
-    // SECURITY FIX: Use secure API endpoint instead of client-side DB query
     try {
       const response = await fetch("/api/admin/get-users")
       if (!response.ok) throw new Error("Failed to fetch users")
@@ -68,21 +65,25 @@ export default function UsersPage() {
   }
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
-    const supabase = createClient()
     const newStatus = !currentStatus
     
-    const { error } = await supabase
-      .from("users")
-      .update({ is_active: newStatus })
-      .eq("id", userId)
+    // SECURITY FIX: Use secure API route instead of direct DB update
+    try {
+      const response = await fetch("/api/admin/toggle-user-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, status: newStatus })
+      })
 
-    if (error) {
-      toast.error("Failed to update user status", { description: error.message })
-      return
+      if (!response.ok) {
+        throw new Error("Failed to update status")
+      }
+
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: newStatus } : u))
+      toast.success(newStatus ? "Account enabled" : "Account disabled")
+    } catch (error: any) {
+      toast.error("Failed to update user status")
     }
-
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: newStatus } : u))
-    toast.success(newStatus ? "Account enabled" : "Account disabled")
   }
 
   const [newUser, setNewUser] = useState({
@@ -116,12 +117,10 @@ export default function UsersPage() {
   }
 
   const handleCreateUser = async () => {
-    // Validate based on role
     if (!newUser.name || !newUser.password || !newUser.role) return
     if (newUser.role === "student" && !newUser.lrn) return
     if (newUser.role !== "student" && !newUser.email) return
 
-    // For students, use LRN with DepEd email format
     const emailToUse = newUser.role === "student" 
       ? `${newUser.lrn}@r1.deped.gov.ph` 
       : newUser.email
@@ -147,7 +146,6 @@ export default function UsersPage() {
         throw new Error(data.error || "Failed to create user")
       }
 
-      // Add to local list
       setUsers((prev) => [
         ...prev,
         { ...data.user, is_active: true }
@@ -157,7 +155,6 @@ export default function UsersPage() {
 
       toast.success("User account created", { description: `Account for ${newUser.name} has been created.` })
       
-      // Notify admin (self)
       addNotification({
         userId: "admin",
         userRole: "admin",
@@ -264,7 +261,6 @@ export default function UsersPage() {
     <div className="min-h-screen">
       <DashboardHeader title="User Accounts" subtitle="Create and manage user login accounts" />
       <div className="p-4 lg:p-6">
-        {/* Stats */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card className="bg-card border-border">
             <CardHeader className="pb-2">
@@ -301,7 +297,6 @@ export default function UsersPage() {
           </Card>
         </div>
 
-        {/* Filters and Actions */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 gap-3">
             <div className="relative flex-1 max-w-sm">
@@ -476,7 +471,6 @@ export default function UsersPage() {
           </Dialog>
         </div>
 
-        {/* Users Table */}
         {fetchingUsers ? (
           <Card className="bg-card border-border">
             <CardContent className="flex items-center justify-center py-12">

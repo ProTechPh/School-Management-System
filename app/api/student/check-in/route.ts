@@ -20,26 +20,6 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export async function POST(request: Request) {
   try {
-    let isIpVerified = false
-    
-    // Security Fix 1: IP Address Restriction
-    // If configured, we check against the school's network IP.
-    // If matched, we consider the location verified without needing GPS.
-    const schoolIp = process.env.SCHOOL_WIFI_IP
-    if (schoolIp) {
-      const forwardedFor = request.headers.get("x-forwarded-for")
-      const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "unknown"
-      
-      if (clientIp === schoolIp) {
-        isIpVerified = true
-      } else {
-         // If strict IP checking is required, uncomment the following:
-         // return NextResponse.json({ 
-         //   error: "Security Check Failed: You must be connected to the school Wi-Fi to check in." 
-         // }, { status: 403 })
-      }
-    }
-
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -65,7 +45,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid QR code data" }, { status: 400 })
     }
 
-    // Force environment variable configuration
     const secret = process.env.QR_SECRET
     if (!secret) {
       console.error("QR_SECRET is not configured")
@@ -128,30 +107,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 5. Server-side Location Verification
-    // If IP is already verified, we skip GPS check to prevent spoofing issues (IP is stronger trust signal)
-    if (session.require_location && !isIpVerified) {
-      if (!latitude || !longitude) {
-        return NextResponse.json({ error: "Location required (or connect to School Wi-Fi)" }, { status: 400 })
+    // 5. Strict Location / IP Verification
+    if (session.require_location) {
+      const schoolIp = process.env.SCHOOL_WIFI_IP
+      let isIpVerified = false
+
+      if (schoolIp) {
+        const forwardedFor = request.headers.get("x-forwarded-for")
+        const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "unknown"
+        if (clientIp === schoolIp) {
+          isIpVerified = true
+        }
       }
 
-      const { data: settings } = await supabase
-        .from("school_settings")
-        .select("latitude, longitude, radius_meters")
-        .single()
+      // If IP is verified, we trust it. If not, check GPS.
+      if (!isIpVerified) {
+        // If SCHOOL_WIFI_IP is set, we strictly enforce it and reject if not matched
+        // This is the most secure option to prevent GPS spoofing
+        if (schoolIp) {
+           return NextResponse.json({ 
+             error: "Security Check Failed: You must be connected to the school Wi-Fi to check in." 
+           }, { status: 403 })
+        }
 
-      const schoolLocation = {
-        latitude: settings?.latitude || 14.5995,
-        longitude: settings?.longitude || 120.9842,
-        radiusMeters: settings?.radius_meters || 500
-      }
+        // Fallback to GPS if no IP restriction configured (less secure but functional)
+        if (!latitude || !longitude) {
+          return NextResponse.json({ error: "Location required" }, { status: 400 })
+        }
 
-      const distance = calculateDistance(latitude, longitude, schoolLocation.latitude, schoolLocation.longitude)
-      
-      if (distance > schoolLocation.radiusMeters) {
-        return NextResponse.json({ 
-          error: `Location check failed. You are ${Math.round(distance)}m away (max ${schoolLocation.radiusMeters}m).` 
-        }, { status: 400 })
+        const { data: settings } = await supabase
+          .from("school_settings")
+          .select("latitude, longitude, radius_meters")
+          .single()
+
+        const schoolLocation = {
+          latitude: settings?.latitude || 14.5995,
+          longitude: settings?.longitude || 120.9842,
+          radiusMeters: settings?.radius_meters || 500
+        }
+
+        const distance = calculateDistance(latitude, longitude, schoolLocation.latitude, schoolLocation.longitude)
+        
+        if (distance > schoolLocation.radiusMeters) {
+          return NextResponse.json({ 
+            error: `Location check failed. You are ${Math.round(distance)}m away (max ${schoolLocation.radiusMeters}m).` 
+          }, { status: 400 })
+        }
       }
     }
 
