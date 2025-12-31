@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 })
     }
 
-    // 2. Fetch Existing Attempt (Must exist from start-quiz)
+    // 2. Fetch Existing Attempt
     const { data: attempt, error: attemptError } = await supabase
       .from("quiz_attempts")
       .select("id, created_at, completed_at")
@@ -42,34 +42,34 @@ export async function POST(request: Request) {
       .single()
 
     if (attemptError || !attempt) {
-      return NextResponse.json({ error: "Quiz attempt not started. Please start the quiz properly." }, { status: 400 })
+      return NextResponse.json({ error: "Quiz attempt not started." }, { status: 400 })
     }
 
     if (attempt.completed_at) {
       return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 })
     }
 
-    // 3. Server-Side Time Verification
-    // Calculate time taken based on server timestamp
+    // 3. Server-Side Time Verification (Strict)
     const startTime = new Date(attempt.created_at).getTime()
     const now = Date.now()
     const durationMinutes = (now - startTime) / 1000 / 60
     
-    // Allow a small buffer (e.g., 2 minutes) for network latency/clock skew
+    // Allow a small buffer (2 minutes) for network latency
     const allowedDuration = quiz.duration + 2 
 
+    let needsManualReview = false
+    let flaggingReason = ""
+
     if (durationMinutes > allowedDuration) {
-      // Flag suspicious attempt instead of rejecting outright to avoid data loss
-      console.warn(`Suspicious quiz duration: User ${user.id} took ${durationMinutes.toFixed(1)} mins for ${quiz.duration} min quiz`)
-      // You might want to add a 'flagged' column to quiz_attempts in a real schema
+      // Flag as suspicious if time limit exceeded
+      needsManualReview = true
+      flaggingReason = "Time limit exceeded"
     }
 
-    // 4. Validate Due Date (Double check)
+    // 4. Validate Due Date
     if (quiz.due_date) {
       const dueDate = new Date(quiz.due_date)
-      // Allow 5 min buffer
-      if (now > dueDate.getTime() + 5 * 60 * 1000) {
-         // Check for reopen extension
+      if (now > dueDate.getTime() + 5 * 60 * 1000) { // 5 min buffer
          const { data: reopen } = await supabase
           .from("quiz_reopens")
           .select("new_due_date")
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     // 5. Grade Answers
     let totalScore = 0
     let maxScore = 0
-    let hasUngradedItems = false
+    let hasEssayQuestions = false
     const gradedAnswers = []
 
     const questionMap = new Map(quiz.questions.map((q: any) => [q.id, q]))
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
           pointsAwarded = question.points
         }
       } else if (question.type === "essay") {
-        hasUngradedItems = true
+        hasEssayQuestions = true
         isCorrect = false
         pointsAwarded = 0
       }
@@ -134,20 +134,25 @@ export async function POST(request: Request) {
       await supabase.from("quiz_attempt_answers").insert(gradedAnswers)
     }
 
-    // 7. Update Attempt with Final Score
+    // 7. Update Attempt
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
+    // If strict time check failed, we force 'needs_grading' to true regardless of question types
+    // We can also override client-side activity logs if they seem suspiciously clean given the timing violation
+    const finalNeedsGrading = hasEssayQuestions || needsManualReview
+
     await supabase
       .from("quiz_attempts")
       .update({
         score: totalScore,
         max_score: maxScore,
         percentage: percentage,
-        needs_grading: hasUngradedItems,
+        needs_grading: finalNeedsGrading,
         completed_at: new Date().toISOString(),
+        // Trust server heuristics over client logs if suspicious
         tab_switches: activityLog?.tabSwitches || 0,
         copy_paste_count: activityLog?.copyPasteCount || 0,
-        exit_attempts: activityLog?.exitAttempts || 0
+        exit_attempts: (activityLog?.exitAttempts || 0) + (needsManualReview ? 1 : 0) // Increment exit attempts if time flagged
       })
       .eq("id", attempt.id)
 
@@ -156,7 +161,8 @@ export async function POST(request: Request) {
       score: totalScore,
       maxScore: maxScore,
       percentage: percentage,
-      needsGrading: hasUngradedItems
+      needsGrading: finalNeedsGrading,
+      flagged: !!flaggingReason
     })
 
   } catch (error: any) {
