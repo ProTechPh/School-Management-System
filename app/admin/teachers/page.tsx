@@ -94,50 +94,20 @@ export default function TeachersPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    // Fetch teachers from users table
-    const { data: teacherData, error: teacherError } = await supabase
-      .from("users")
-      .select("id, name, email, avatar, phone, address")
-      .eq("role", "teacher")
-      .order("name")
-
-    if (teacherError) {
-      console.error("Error fetching teachers:", teacherError)
-      return
+    try {
+      // Use secure API route
+      const response = await fetch("/api/admin/teachers")
+      if (!response.ok) throw new Error("Failed to fetch teachers")
+      
+      const { teachers: teacherData } = await response.json()
+      if (teacherData) {
+        setTeachers(teacherData)
+      }
+    } catch (error: any) {
+      toast.error("Error loading teachers", { description: error.message })
     }
 
-    // Fetch all teacher profiles separately
-    const { data: profileData, error: profileError } = await supabase
-      .from("teacher_profiles")
-      .select("id, subject, department, join_date")
-
-    if (profileError) {
-      console.error("Error fetching profiles:", profileError)
-    }
-
-    // Create a map of profiles by id for quick lookup
-    const profileMap = new Map(
-      (profileData || []).map(p => [p.id, p])
-    )
-
-    if (teacherData) {
-      setTeachers(teacherData.map(t => {
-        const profile = profileMap.get(t.id)
-        return {
-          id: t.id,
-          name: t.name,
-          email: t.email,
-          avatar: t.avatar,
-          phone: t.phone,
-          address: t.address,
-          subject: profile?.subject || "N/A",
-          department: profile?.department || null,
-          join_date: profile?.join_date || null,
-        }
-      }))
-    }
-
-    // Fetch classes
+    // Fetch classes (less sensitive, can keep client-side or move later)
     const { data: classData } = await supabase
       .from("classes")
       .select("id, name, grade, section, room, schedule, teacher_id")

@@ -58,38 +58,40 @@ export default function StudentsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    const { data, error } = await supabase
-      .from("users")
-      .select(`
-        id, name, email, avatar, address,
-        student_profiles (grade, section, lrn, father_name, father_contact, mother_name, mother_contact, guardian_name, guardian_contact, enrollment_date)
-      `)
-      .eq("role", "student")
-      .order("name")
+    try {
+      // Use secure API route
+      const response = await fetch("/api/admin/students")
+      if (!response.ok) throw new Error("Failed to fetch students")
+      
+      const { students: data } = await response.json()
 
-    if (!error && data) {
-      setStudents(data.map(s => {
-        const profile = (s.student_profiles as any)?.[0]
-        // Determine parent/guardian name and phone from available contacts
-        const parentName = profile?.father_name || profile?.mother_name || profile?.guardian_name || null
-        const parentPhone = profile?.father_contact || profile?.mother_contact || profile?.guardian_contact || null
-        
-        return {
-          id: s.id,
-          name: s.name,
-          email: s.email,
-          avatar: s.avatar,
-          address: s.address,
-          grade: profile?.grade || "N/A",
-          section: profile?.section || "N/A",
-          lrn: profile?.lrn || null,
-          parent_name: parentName,
-          parent_phone: parentPhone,
-          enrollment_date: profile?.enrollment_date,
-        }
-      }))
+      if (data) {
+        setStudents(data.map((s: any) => {
+          const profile = (s.student_profiles as any)?.[0] || (s.student_profiles as any)
+          // Determine parent/guardian name and phone from available contacts
+          const parentName = profile?.father_name || profile?.mother_name || profile?.guardian_name || null
+          const parentPhone = profile?.father_contact || profile?.mother_contact || profile?.guardian_contact || null
+          
+          return {
+            id: s.id,
+            name: s.name,
+            email: s.email,
+            avatar: s.avatar,
+            address: s.address,
+            grade: profile?.grade || "N/A",
+            section: profile?.section || "N/A",
+            lrn: profile?.lrn || null,
+            parent_name: parentName,
+            parent_phone: parentPhone,
+            enrollment_date: profile?.enrollment_date,
+          }
+        }))
+      }
+    } catch (error: any) {
+      toast.error("Error loading students", { description: error.message })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const filteredStudents = students.filter((student) => {
