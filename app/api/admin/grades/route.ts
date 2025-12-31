@@ -21,8 +21,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Fetch grades with service role logic (implicit via RLS bypass or explicit check)
-    // Here we rely on the authenticated admin user having proper RLS or just returning data securely
+    // Fetch grades
     const { data: gradeData, error } = await supabase
       .from("grades")
       .select(`
@@ -34,7 +33,23 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
-    return NextResponse.json({ grades: gradeData })
+    // SECURITY FIX: DTO Pattern
+    const safeGrades = gradeData.map((g: any) => ({
+      id: g.id,
+      student_id: g.student_id,
+      student_name: g.student?.name || "Unknown",
+      class_id: g.class_id,
+      class_name: g.class?.name || "Unknown",
+      subject: g.class?.subject || "Unknown",
+      score: g.score,
+      max_score: g.max_score,
+      percentage: g.percentage,
+      grade: g.grade,
+      type: g.type,
+      date: g.date
+    }))
+
+    return NextResponse.json({ grades: safeGrades })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

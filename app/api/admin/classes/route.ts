@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
     if (classError) throw classError
 
-    // Fetch student counts (can be optimized but keeping simple for now)
+    // Fetch student counts
     const { data: enrollments, error: enrollError } = await supabase
       .from("class_students")
       .select("class_id")
@@ -43,12 +43,21 @@ export async function GET(request: Request) {
       countMap[e.class_id] = (countMap[e.class_id] || 0) + 1
     })
 
-    const classesWithCounts = classData.map((c: any) => ({
-      ...c,
+    // SECURITY FIX: DTO Pattern
+    const safeClasses = classData.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      grade: c.grade,
+      section: c.section,
+      subject: c.subject,
+      room: c.room,
+      schedule: c.schedule,
+      teacher_id: c.teacher_id,
+      teacher_name: c.teacher?.name || null,
       student_count: countMap[c.id] || 0
     }))
 
-    return NextResponse.json({ classes: classesWithCounts })
+    return NextResponse.json({ classes: safeClasses })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

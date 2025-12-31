@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { BookOpen, Users, ClipboardCheck, Calendar, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface ClassInfo {
   id: string
@@ -53,6 +54,7 @@ export default function TeacherDashboard() {
   const fetchData = async () => {
     const supabase = createClient()
     
+    // Get user info for header
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -65,100 +67,24 @@ export default function TeacherDashboard() {
       .single()
     if (userData) setUserName(userData.name)
 
-    // Fetch teacher's classes
-    const { data: classData } = await supabase
-      .from("classes")
-      .select("id, name, grade, section, subject, schedule, room")
-      .eq("teacher_id", user.id)
-      .order("name")
-
-    if (classData) {
-      setClasses(classData)
-
-      // Count students in teacher's classes
-      const classIds = classData.map(c => c.id)
-      if (classIds.length > 0) {
-        const { count } = await supabase
-          .from("class_students")
-          .select("*", { count: "exact", head: true })
-          .in("class_id", classIds)
-        setTotalStudents(count || 0)
-
-        // Calculate attendance rate for teacher's classes
-        const { data: attendanceData } = await supabase
-          .from("attendance_records")
-          .select("status")
-          .in("class_id", classIds)
-        
-        if (attendanceData && attendanceData.length > 0) {
-          const presentCount = attendanceData.filter(a => a.status === "present" || a.status === "late").length
-          const rate = (presentCount / attendanceData.length) * 100
-          setAttendanceRate(Math.round(rate * 10) / 10)
-        } else {
-          setAttendanceRate(null)
-        }
-
-        // Fetch students in teacher's classes
-        const { data: enrollments } = await supabase
-          .from("class_students")
-          .select(`
-            student:users!class_students_student_id_fkey (id, name, avatar)
-          `)
-          .in("class_id", classIds)
-          .limit(8)
-
-        if (enrollments) {
-          const uniqueStudents = new Map()
-          for (const e of enrollments) {
-            const s = e.student as any
-            if (s && !uniqueStudents.has(s.id)) {
-              // Fetch student profile separately
-              const { data: profile } = await supabase
-                .from("student_profiles")
-                .select("grade, section")
-                .eq("id", s.id)
-                .single()
-              
-              uniqueStudents.set(s.id, {
-                id: s.id,
-                name: s.name,
-                avatar: s.avatar,
-                grade: profile?.grade || "N/A",
-                section: profile?.section || "N/A",
-              })
-            }
-          }
-          setStudents(Array.from(uniqueStudents.values()).slice(0, 8))
-        }
-      }
+    // SECURITY FIX: Use secure API route instead of direct client queries
+    try {
+      const response = await fetch("/api/teacher/dashboard")
+      if (!response.ok) throw new Error("Failed to load dashboard")
+      
+      const data = await response.json()
+      
+      setClasses(data.classes)
+      setTotalStudents(data.totalStudents)
+      setAttendanceRate(data.attendanceRate)
+      setStudents(data.students)
+      setTodaySchedule(data.todaySchedule)
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to load dashboard data")
+    } finally {
+      setLoading(false)
     }
-
-    // Fetch today's schedule
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    const today = days[new Date().getDay()]
-
-    const { data: scheduleData } = await supabase
-      .from("schedules")
-      .select(`
-        id, day, start_time, end_time, room,
-        class:classes!inner (name, teacher_id)
-      `)
-      .eq("day", today)
-      .eq("class.teacher_id", user.id)
-      .order("start_time")
-
-    if (scheduleData) {
-      setTodaySchedule(scheduleData.map(s => ({
-        id: s.id,
-        day: s.day,
-        start_time: s.start_time,
-        end_time: s.end_time,
-        room: s.room,
-        class_name: (s.class as any)?.name || "Unknown",
-      })))
-    }
-
-    setLoading(false)
   }
 
   if (loading) {
@@ -184,7 +110,7 @@ export default function TeacherDashboard() {
           <StatCard title="My Classes" value={classes.length} icon={BookOpen} />
           <StatCard title="Total Students" value={totalStudents} icon={Users} />
           <StatCard title="Today's Classes" value={todaySchedule.length} icon={Calendar} />
-          <StatCard title="Attendance Rate" value={attendanceRate !== null ? `${attendanceRate}%` : "N/A"} icon={ClipboardCheck} />
+          <StatCard title="Attendance Rate" value={attendanceRate !== null && attendanceRate !== 0 ? `${attendanceRate}%` : "N/A"} icon={ClipboardCheck} />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">

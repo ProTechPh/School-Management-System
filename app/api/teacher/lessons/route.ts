@@ -33,7 +33,24 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
-    return NextResponse.json({ lessons })
+    // SECURITY FIX: DTO Pattern
+    const safeLessons = lessons.map((l: any) => ({
+      id: l.id,
+      title: l.title,
+      description: l.description,
+      content: l.content,
+      class_id: l.class_id,
+      class_name: l.class?.name || "Unknown",
+      materials: l.materials?.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        type: m.type,
+        url: m.url
+      })) || [],
+      updated_at: l.updated_at
+    }))
+
+    return NextResponse.json({ lessons: safeLessons })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

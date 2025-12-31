@@ -31,7 +31,18 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
-    return NextResponse.json({ attendance: attendanceData })
+    // SECURITY FIX: DTO Pattern
+    const safeAttendance = attendanceData.map((r: any) => ({
+      id: r.id,
+      student_id: r.student_id,
+      student_name: r.student?.name || "Unknown",
+      class_id: r.class_id,
+      class_name: r.class?.name || "Unknown",
+      date: r.date,
+      status: r.status
+    }))
+
+    return NextResponse.json({ attendance: safeAttendance })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
