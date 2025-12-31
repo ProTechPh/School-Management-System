@@ -897,6 +897,7 @@ export const quizzes: Quiz[] = [
     questions: [
       {
         id: "qq1",
+        type: "multiple-choice",
         question: "What is the solution to x² - 4 = 0?",
         options: ["x = 2", "x = ±2", "x = 4", "x = ±4"],
         correctAnswer: 1,
@@ -904,6 +905,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq2",
+        type: "multiple-choice",
         question: "Which of the following is a quadratic equation?",
         options: ["2x + 3 = 0", "x² + 2x + 1 = 0", "x³ - 1 = 0", "1/x = 2"],
         correctAnswer: 1,
@@ -911,6 +913,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq3",
+        type: "multiple-choice",
         question: "The vertex form of a parabola is:",
         options: ["y = ax² + bx + c", "y = a(x-h)² + k", "y = mx + b", "y = ax³ + bx²"],
         correctAnswer: 1,
@@ -918,6 +921,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq4",
+        type: "multiple-choice",
         question: "What is the discriminant formula?",
         options: ["b² - 4ac", "b² + 4ac", "-b ± √(b²-4ac)", "2a"],
         correctAnswer: 0,
@@ -925,6 +929,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq5",
+        type: "multiple-choice",
         question: "If the discriminant is negative, the equation has:",
         options: ["Two real roots", "One real root", "No real roots", "Infinite roots"],
         correctAnswer: 2,
@@ -948,6 +953,7 @@ export const quizzes: Quiz[] = [
     questions: [
       {
         id: "qq6",
+        type: "multiple-choice",
         question: "Newton's First Law is also known as the law of:",
         options: ["Acceleration", "Inertia", "Action-Reaction", "Gravity"],
         correctAnswer: 1,
@@ -955,6 +961,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq7",
+        type: "multiple-choice",
         question: "The formula F = ma represents which law?",
         options: ["First Law", "Second Law", "Third Law", "Law of Gravitation"],
         correctAnswer: 1,
@@ -962,6 +969,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq8",
+        type: "multiple-choice",
         question: "According to Newton's Third Law, forces always come in:",
         options: ["Singles", "Pairs", "Triples", "Quadruples"],
         correctAnswer: 1,
@@ -969,6 +977,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq9",
+        type: "multiple-choice",
         question: "What is the SI unit of force?",
         options: ["Joule", "Watt", "Newton", "Pascal"],
         correctAnswer: 2,
@@ -992,6 +1001,7 @@ export const quizzes: Quiz[] = [
     questions: [
       {
         id: "qq10",
+        type: "multiple-choice",
         question: "Which play features the characters Romeo and Juliet?",
         options: ["Hamlet", "Romeo and Juliet", "Macbeth", "Othello"],
         correctAnswer: 1,
@@ -999,6 +1009,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq11",
+        type: "multiple-choice",
         question: "'To be or not to be' is from which play?",
         options: ["King Lear", "Macbeth", "Hamlet", "The Tempest"],
         correctAnswer: 2,
@@ -1006,6 +1017,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq12",
+        type: "multiple-choice",
         question: "What type of play is 'A Midsummer Night's Dream'?",
         options: ["Tragedy", "History", "Comedy", "Romance"],
         correctAnswer: 2,
@@ -1013,6 +1025,7 @@ export const quizzes: Quiz[] = [
       },
       {
         id: "qq13",
+        type: "multiple-choice",
         question: "How many sonnets did Shakespeare write?",
         options: ["100", "154", "200", "50"],
         correctAnswer: 1,
@@ -1032,7 +1045,13 @@ export const quizAttempts: QuizAttempt[] = [
     quizId: "q1",
     studentId: "s1",
     studentName: "Emma Wilson",
-    answers: [1, 1, 1, 0, 2],
+    answers: [
+      { questionId: "qq1", answer: 1, isCorrect: true },
+      { questionId: "qq2", answer: 1, isCorrect: true },
+      { questionId: "qq3", answer: 1, isCorrect: true },
+      { questionId: "qq4", answer: 0, isCorrect: true },
+      { questionId: "qq5", answer: 2, isCorrect: true }
+    ],
     score: 100,
     maxScore: 100,
     percentage: 100,
@@ -1043,7 +1062,13 @@ export const quizAttempts: QuizAttempt[] = [
     quizId: "q1",
     studentId: "s2",
     studentName: "Liam Johnson",
-    answers: [1, 1, 0, 0, 1],
+    answers: [
+      { questionId: "qq1", answer: 1, isCorrect: true },
+      { questionId: "qq2", answer: 1, isCorrect: true },
+      { questionId: "qq3", answer: 0, isCorrect: false },
+      { questionId: "qq4", answer: 0, isCorrect: true },
+      { questionId: "qq5", answer: 1, isCorrect: false }
+    ],
     score: 80,
     maxScore: 100,
     percentage: 80,
@@ -1361,6 +1386,7 @@ export const qrAttendanceSessions: QRAttendanceSession[] = [
     qrCode: "ATT-C1-20241219-0900",
     status: "active",
     checkedInStudents: ["s1", "s2"],
+    requireLocation: true,
   },
 ]
 
