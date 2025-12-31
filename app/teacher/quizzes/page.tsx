@@ -192,18 +192,21 @@ export default function TeacherQuizzesPage() {
       setQuizzes(quizzesData as Quiz[])
     }
 
-    // Fetch all quiz attempts
+    // Fetch attempts - Ensure strict filtering by teacher's quizzes
+    // We filter by joining with quizzes table and checking teacher_id
     const { data: attemptsData } = await supabase
       .from("quiz_attempts")
       .select(`
         *,
-        student:users!quiz_attempts_student_id_fkey (id, name)
+        student:users!quiz_attempts_student_id_fkey (id, name),
+        quiz:quizzes!inner (teacher_id)
       `)
+      .eq("quiz.teacher_id", user.id) // Filter server-side
       .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
 
     if (attemptsData) {
-      setQuizAttempts(attemptsData as QuizAttempt[])
+      setQuizAttempts(attemptsData as any[])
     }
 
     setLoading(false)
