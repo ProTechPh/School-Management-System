@@ -1,5 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { consumeStream, convertToModelMessages, streamText, type UIMessage } from "ai"
+import { createClient } from "@/lib/supabase/server"
 
 export const maxDuration = 30
 
@@ -12,7 +13,25 @@ const provider = createOpenAICompatible({
 })
 
 export async function POST(req: Request) {
-  const { messages, context }: { messages: UIMessage[]; context?: string } = await req.json()
+  // SECURITY FIX: Verify authentication and fetch user details server-side
+  // instead of trusting client-provided context
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return new Response("Unauthorized", { status: 401 })
+  }
+
+  // Fetch user role and name from database
+  const { data: userData } = await supabase
+    .from("users")
+    .select("name, role")
+    .eq("id", user.id)
+    .single()
+
+  const safeContext = `User: ${userData?.name || "Unknown"}, Role: ${userData?.role || "student"}`
+
+  const { messages }: { messages: UIMessage[] } = await req.json()
 
   const systemPrompt = `You are Mira AI, an AI assistant for a School Management System called LessonGo. 
 You help students, teachers, and administrators with:
@@ -23,7 +42,7 @@ You help students, teachers, and administrators with:
 - Assisting with scheduling and organization
 - Answering general educational questions
 
-${context ? `Current user context: ${context}` : ""}
+Current user context: ${safeContext}
 
 Be friendly, helpful, and educational. Keep responses concise but informative.
 If asked about specific student records or grades, remind users that you can only provide general guidance and they should check the actual system for specific data.`

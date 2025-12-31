@@ -50,16 +50,21 @@ export default function UsersPage() {
   }, [])
 
   const fetchUsers = async () => {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, email, name, role, created_at, is_active")
-      .order("name")
-    
-    if (!error && data) {
-      setUsers(data.map(u => ({ ...u, is_active: u.is_active ?? true })) as UserAccount[])
+    // SECURITY FIX: Use secure API endpoint instead of client-side DB query
+    try {
+      const response = await fetch("/api/admin/get-users")
+      if (!response.ok) throw new Error("Failed to fetch users")
+      const data = await response.json()
+      
+      if (data.users) {
+        setUsers(data.users.map((u: any) => ({ ...u, is_active: u.is_active ?? true })))
+      }
+    } catch (error) {
+      toast.error("Error fetching users")
+      console.error(error)
+    } finally {
+      setFetchingUsers(false)
     }
-    setFetchingUsers(false)
   }
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
@@ -89,7 +94,6 @@ export default function UsersPage() {
   })
 
   const generatePassword = () => {
-    // Fix 2: Use cryptographically secure random password instead of predictable name-based one
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
     const array = new Uint32Array(12)
     crypto.getRandomValues(array)
@@ -124,7 +128,6 @@ export default function UsersPage() {
 
     setLoading(true)
 
-    // Fix 5: Use API route to create user to prevent admin session disruption
     try {
       const response = await fetch("/api/admin/create-user", {
         method: "POST",

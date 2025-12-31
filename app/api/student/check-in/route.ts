@@ -45,8 +45,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid QR code data" }, { status: 400 })
     }
 
+    // SECURITY FIX: Remove hardcoded fallback. Force environment variable configuration.
+    const secret = process.env.QR_SECRET
+    if (!secret) {
+      console.error("QR_SECRET is not configured")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+    }
+
     // Verify HMAC signature
-    const secret = process.env.QR_SECRET || "default-secure-secret-key-change-in-prod"
     const dataToVerify = `${sessionId}:${timestamp}`
     const expectedSignature = crypto.createHmac("sha256", secret).update(dataToVerify).digest("hex")
 

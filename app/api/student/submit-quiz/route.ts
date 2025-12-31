@@ -17,13 +17,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid submission data" }, { status: 400 })
     }
 
-    // 1. Fetch Quiz and Questions (including correct answers)
-    // We use the server client which has access to the data, but we process it here
-    // and only return the score, not the answer key.
+    // 1. Fetch Quiz and Questions
     const { data: quiz, error: quizError } = await supabase
       .from("quizzes")
       .select(`
-        id, duration, due_date,
+        id, duration, due_date, class_id,
         questions:quiz_questions (
           id, type, points, correct_answer, options
         )
@@ -35,13 +33,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 })
     }
 
-    // 2. Validate Due Date (Server-side check)
+    // SECURITY FIX: Verify student enrollment
+    const { data: enrollment } = await supabase
+      .from("class_students")
+      .select("id")
+      .eq("class_id", quiz.class_id)
+      .eq("student_id", user.id)
+      .single()
+
+    if (!enrollment) {
+      return NextResponse.json({ error: "You are not enrolled in this class" }, { status: 403 })
+    }
+
+    // 2. Validate Due Date
     if (quiz.due_date) {
       const dueDate = new Date(quiz.due_date)
-      // Add a small buffer (e.g., 5 minutes) for network latency/clock skew
       const now = new Date()
       if (now.getTime() > dueDate.getTime() + 5 * 60 * 1000) {
-        // Check if student has a specific reopen extension
         const { data: reopen } = await supabase
           .from("quiz_reopens")
           .select("new_due_date")
@@ -61,10 +69,10 @@ export async function POST(request: Request) {
       .insert({
         quiz_id: quizId,
         student_id: user.id,
-        score: 0, // Calculated below
-        max_score: 0, // Calculated below
+        score: 0,
+        max_score: 0,
         percentage: 0,
-        needs_grading: true, // Default to true, check below
+        needs_grading: true,
         completed_at: new Date().toISOString(),
         tab_switches: activityLog?.tabSwitches || 0,
         copy_paste_count: activityLog?.copyPasteCount || 0,
@@ -94,16 +102,12 @@ export async function POST(request: Request) {
       
       maxScore += question.points
 
-      // Auto-grading logic
       if (question.type === "multiple-choice" || question.type === "true-false") {
-        // For these types, correct_answer is usually an index stored as string
         if (String(submission.answer) === String(question.correct_answer)) {
           isCorrect = true
           pointsAwarded = question.points
         }
       } else if (question.type === "identification") {
-        // Case insensitive check if configured (assuming question data might have case_sensitive flag, 
-        // defaulting to insensitive for simplicity here unless strictly specified)
         const studentAns = String(submission.answer).trim().toLowerCase()
         const correctAns = String(question.correct_answer).trim().toLowerCase()
         if (studentAns === correctAns) {
@@ -112,7 +116,6 @@ export async function POST(request: Request) {
         }
       } else if (question.type === "essay") {
         hasUngradedItems = true
-        // Essays are always false/0 until graded by teacher
         isCorrect = false
         pointsAwarded = 0
       }
@@ -130,15 +133,7 @@ export async function POST(request: Request) {
 
     // 5. Save Graded Answers
     if (gradedAnswers.length > 0) {
-      const { error: ansError } = await supabase
-        .from("quiz_attempt_answers")
-        .insert(gradedAnswers)
-      
-      if (ansError) {
-        // Log error but don't fail the whole request if possible, 
-        // though typically we'd want transaction consistency.
-        console.error("Error saving answers:", ansError)
-      }
+      await supabase.from("quiz_attempt_answers").insert(gradedAnswers)
     }
 
     // 6. Update Attempt with Final Score

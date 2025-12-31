@@ -28,8 +28,13 @@ export async function POST(request: Request) {
     }
 
     const timestamp = Date.now()
-    // In production, use a long, random string from process.env.QR_SECRET
-    const secret = process.env.QR_SECRET || "default-secure-secret-key-change-in-prod"
+    
+    // SECURITY FIX: Remove hardcoded fallback. Force environment variable configuration.
+    const secret = process.env.QR_SECRET
+    if (!secret) {
+      console.error("QR_SECRET is not configured")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+    }
     
     // Create HMAC signature
     const payload = `${sessionId}:${timestamp}`
