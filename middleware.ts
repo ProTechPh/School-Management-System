@@ -48,16 +48,18 @@ export async function middleware(request: NextRequest) {
       .single()
     
     // Enforce Password Change Policy
-    // If user must change password, redirect them to /change-password
-    // Allow access to /change-password itself and API routes needed for it
-    if (
-      userData?.must_change_password && 
-      !request.nextUrl.pathname.startsWith("/change-password") &&
-      !request.nextUrl.pathname.startsWith("/api/") &&
-      !request.nextUrl.pathname.startsWith("/_next/") &&
-      request.nextUrl.pathname !== "/favicon.ico"
-    ) {
-      return NextResponse.redirect(new URL("/change-password", request.url))
+    // SECURITY FIX: Removed blanket /api/ exclusion. Now only specific auth endpoints are allowed.
+    if (userData?.must_change_password) {
+      const isAllowedPath = 
+        request.nextUrl.pathname.startsWith("/change-password") ||
+        request.nextUrl.pathname.startsWith("/_next/") ||
+        request.nextUrl.pathname === "/favicon.ico" ||
+        // Allow auth related APIs needed for password change/logout
+        request.nextUrl.pathname.startsWith("/api/auth")
+
+      if (!isAllowedPath) {
+        return NextResponse.redirect(new URL("/change-password", request.url))
+      }
     }
 
     if (isProtected) {
@@ -92,6 +94,7 @@ export const config = {
     "/student/:path*",
     "/test-supabase/:path*",
     "/change-password",
-    "/login"
+    "/login",
+    "/api/:path*" // Include API routes in matcher to ensure enforcement
   ],
 }
