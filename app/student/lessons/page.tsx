@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { FileText, Video, LinkIcon, Download, Play, ExternalLink, File, BookOpen, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface Material {
   id: string
@@ -32,7 +33,7 @@ const getSafeUrl = (url: string) => {
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return url
   }
-  return "#"
+  return null
 }
 
 export default function StudentLessonsPage() {
@@ -86,6 +87,45 @@ export default function StudentLessonsPage() {
     }
 
     setLoading(false)
+  }
+
+  const handleMaterialClick = async (material: Material, e: React.MouseEvent) => {
+    e.preventDefault()
+    
+    // 1. Check if it's an external link
+    const safeUrl = getSafeUrl(material.url)
+    if (safeUrl) {
+      window.open(safeUrl, "_blank")
+      return
+    }
+
+    // 2. If it's a storage path, get a signed URL
+    // Open a blank window first to prevent popup blockers
+    const newWindow = window.open("", "_blank")
+    
+    try {
+      const response = await fetch("/api/materials/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: material.url })
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to access material")
+      }
+
+      const { signedUrl } = await response.json()
+      
+      if (newWindow) {
+        newWindow.location.href = signedUrl
+      } else {
+        window.location.href = signedUrl
+      }
+    } catch (error) {
+      console.error("Access error:", error)
+      if (newWindow) newWindow.close()
+      toast.error("Unable to open material. You may not have access.")
+    }
   }
 
   const materialIcon: Record<string, any> = {
@@ -148,21 +188,12 @@ export default function StudentLessonsPage() {
                       {selectedLesson.materials.map((material) => {
                         const Icon = materialIcon[material.type] || File
                         const Action = materialAction[material.type] || materialAction.document
-                        const safeUrl = getSafeUrl(material.url)
                         
-                        return material.url ? (
-                          <a
+                        return (
+                          <div
                             key={material.id}
-                            href={safeUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-muted/50 transition-colors cursor-pointer"
-                            onClick={(e) => {
-                              if (safeUrl === "#") {
-                                e.preventDefault()
-                                alert("Invalid or unsafe link")
-                              }
-                            }}
+                            onClick={(e) => handleMaterialClick(material, e)}
                           >
                             <div className="flex items-center gap-3">
                               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -177,19 +208,6 @@ export default function StudentLessonsPage() {
                               <Action.icon className="h-4 w-4" />
                               <span>{Action.label}</span>
                             </div>
-                          </a>
-                        ) : (
-                          <div key={material.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                                <Icon className="h-5 w-5 text-primary" />
-                              </div>
-                              <div>
-                                <p className="font-medium text-foreground">{material.name}</p>
-                                {material.size && <p className="text-xs text-muted-foreground">{material.size}</p>}
-                              </div>
-                            </div>
-                            <span className="text-sm text-muted-foreground">No link</span>
                           </div>
                         )
                       })}

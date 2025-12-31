@@ -138,9 +138,10 @@ export async function POST(request: Request) {
       const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
       
       if (allowedIps) {
-        // SECURITY FIX: Get the FIRST IP in the chain (Client IP) instead of the last (Proxy IP)
+        // SECURITY FIX: Get the LAST IP in the chain (Real Client IP) instead of the first (potentially spoofed)
         const forwardedFor = request.headers.get("x-forwarded-for")
-        const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() || "unknown" : "unknown"
+        const ips = forwardedFor ? forwardedFor.split(',').map(ip => ip.trim()) : []
+        const clientIp = ips.length > 0 ? ips[ips.length - 1] : "unknown"
         
         const allowedList = allowedIps.split(',').map(ip => ip.trim())
         
