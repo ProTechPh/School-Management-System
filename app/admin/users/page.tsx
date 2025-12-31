@@ -89,29 +89,14 @@ export default function UsersPage() {
   })
 
   const generatePassword = () => {
-    // Format: 2 first letters of first name + 2 last letters of last name + DMNHS
-    // e.g., "Jericko Dela Cruz Garcia" → JeIaDMNHS
-    const name = newUser.name.trim()
-    
-    if (!name) {
-      setNewUser({ ...newUser, password: `UserDMNHS` })
-      return
+    // Fix 2: Use cryptographically secure random password instead of predictable name-based one
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
+    const array = new Uint32Array(12)
+    crypto.getRandomValues(array)
+    let password = ""
+    for (let i = 0; i < 12; i++) {
+      password += chars[array[i] % chars.length]
     }
-    
-    const nameParts = name.split(" ").filter(Boolean)
-    const firstName = nameParts[0] || ""
-    const lastName = nameParts[nameParts.length - 1] || firstName
-    
-    // First 2 letters of first name: First uppercase, second lowercase
-    const first1 = firstName.charAt(0).toUpperCase()
-    const first2 = firstName.charAt(1).toLowerCase()
-    
-    // Last 2 letters of last name: First uppercase, second lowercase
-    const last2chars = lastName.slice(-2)
-    const last1 = last2chars.charAt(0).toUpperCase()
-    const last2 = last2chars.charAt(1).toLowerCase()
-    
-    const password = `${first1}${first2}${last1}${last2}DMNHS`
     setNewUser({ ...newUser, password })
   }
 
@@ -138,92 +123,38 @@ export default function UsersPage() {
       : newUser.email
 
     setLoading(true)
-    const supabase = createClient()
 
-    // Create auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: emailToUse,
-      password: newUser.password,
-      options: {
-        data: {
+    // Fix 5: Use API route to create user to prevent admin session disruption
+    try {
+      const response = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailToUse,
+          password: newUser.password,
           name: newUser.name,
           role: newUser.role,
-        },
-      },
-    })
-
-    if (authError) {
-      toast.error("Error creating user", { description: authError.message })
-      addNotification({
-        userId: "admin",
-        userRole: "admin",
-        title: "Error Creating User",
-        message: authError.message,
-        type: "warning",
-        read: false,
-      })
-      setLoading(false)
-      return
-    }
-
-    if (authData.user) {
-      // Create user record
-      const { error: userError } = await supabase.from("users").insert({
-        id: authData.user.id,
-        email: emailToUse,
-        name: newUser.name,
-        role: newUser.role,
-        is_active: true,
-        must_change_password: true,
+          lrn: newUser.lrn
+        })
       })
 
-      if (userError) {
-        toast.error("Error creating user record", { description: userError.message })
-        addNotification({
-          userId: "admin",
-          userRole: "admin",
-          title: "Error",
-          message: userError.message,
-          type: "warning",
-          read: false,
-        })
-        setLoading(false)
-        return
-      }
+      const data = await response.json()
 
-      // Create role-specific profile
-      if (newUser.role === "student") {
-        await supabase.from("student_profiles").insert({
-          id: authData.user.id,
-          lrn: newUser.lrn,
-          first_name: newUser.name.split(" ")[0],
-          last_name: newUser.name.split(" ").slice(-1)[0],
-          grade: "10",
-          section: "A",
-        })
-      } else if (newUser.role === "teacher") {
-        await supabase.from("teacher_profiles").insert({
-          id: authData.user.id,
-          subject: "General",
-        })
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create user")
       }
 
       // Add to local list
       setUsers((prev) => [
         ...prev,
-        {
-          id: authData.user!.id,
-          email: emailToUse,
-          name: newUser.name,
-          role: newUser.role as "admin" | "teacher" | "student",
-          created_at: new Date().toISOString(),
-          is_active: true,
-        },
+        { ...data.user, is_active: true }
       ])
 
       setCreatedUser({ email: emailToUse, password: newUser.password })
 
       toast.success("User account created", { description: `Account for ${newUser.name} has been created.` })
+      
+      // Notify admin (self)
       addNotification({
         userId: "admin",
         userRole: "admin",
@@ -232,9 +163,12 @@ export default function UsersPage() {
         type: "success",
         read: false,
       })
-    }
 
-    setLoading(false)
+    } catch (error: any) {
+      toast.error("Error creating user", { description: error.message })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const resetForm = () => {

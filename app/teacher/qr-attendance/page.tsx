@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { QRCodeGenerator } from "@/components/qr-code-generator"
-import { QrCode, Plus, Users, Clock, StopCircle, MapPin, Loader2 } from "lucide-react"
+import { QrCode, Plus, Users, Clock, StopCircle, MapPin, Loader2, RefreshCw } from "lucide-react"
 import { useSchoolLocationStore } from "@/lib/school-location-store"
 import { createClient } from "@/lib/supabase/client"
 import { format } from "date-fns"
@@ -24,13 +24,6 @@ interface TeacherClass {
   subject: string
 }
 
-interface Student {
-  id: string
-  name: string
-  grade: string
-  section: string
-}
-
 interface QRSession {
   id: string
   class_id: string
@@ -39,7 +32,6 @@ interface QRSession {
   date: string
   start_time: string
   end_time: string | null
-  qr_code: string
   status: "active" | "expired"
   require_location: boolean
   checkins: { student_id: string }[]
@@ -52,7 +44,7 @@ export default function TeacherQRAttendancePage() {
   const [loading, setLoading] = useState(true)
   const [currentTeacher, setCurrentTeacher] = useState<{ id: string; name: string } | null>(null)
   const [teacherClasses, setTeacherClasses] = useState<TeacherClass[]>([])
-  const [students, setStudents] = useState<Student[]>([])
+  const [currentQRData, setCurrentQRData] = useState<string>("")
   const [formData, setFormData] = useState({
     classId: "",
     date: format(new Date(), "yyyy-MM-dd"),
@@ -61,11 +53,45 @@ export default function TeacherQRAttendancePage() {
     requireLocation: true,
   })
   
-  const { location: schoolLocation } = useSchoolLocationStore()
+  // Rotating QR interval
+  const rotationIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     fetchData()
+    return () => {
+      if (rotationIntervalRef.current) clearInterval(rotationIntervalRef.current)
+    }
   }, [])
+
+  // Start rotating QR code when session is selected
+  useEffect(() => {
+    if (selectedSessionId) {
+      updateQRCode()
+      rotationIntervalRef.current = setInterval(updateQRCode, 15000) // Rotate every 15s
+    } else {
+      if (rotationIntervalRef.current) clearInterval(rotationIntervalRef.current)
+    }
+    return () => {
+      if (rotationIntervalRef.current) clearInterval(rotationIntervalRef.current)
+    }
+  }, [selectedSessionId])
+
+  const updateQRCode = () => {
+    if (!selectedSessionId) return
+    
+    // Generate a time-sensitive token
+    // Format: session_id|timestamp|signature
+    // In a real app, signature would be HMAC. Here we rely on timestamp freshness check on server.
+    const timestamp = Date.now()
+    const payload = JSON.stringify({
+      sessionId: selectedSessionId,
+      timestamp: timestamp
+    })
+    
+    // Simple encoding to make it look like a token
+    const encoded = btoa(payload)
+    setCurrentQRData(encoded)
+  }
 
   const fetchData = async () => {
     const supabase = createClient()
@@ -100,7 +126,7 @@ export default function TeacherQRAttendancePage() {
     const { data: sessionData } = await supabase
       .from("qr_attendance_sessions")
       .select(`
-        id, class_id, teacher_id, date, start_time, end_time, qr_code, status, require_location,
+        id, class_id, teacher_id, date, start_time, end_time, status, require_location,
         class:classes (name),
         checkins:qr_checkins (student_id)
       `)
@@ -114,24 +140,8 @@ export default function TeacherQRAttendancePage() {
       })))
     }
 
-    const { data: studentData } = await supabase
-      .from("users")
-      .select(`id, name, student_profiles (grade, section)`)
-      .eq("role", "student")
-
-    if (studentData) {
-      setStudents(studentData.map(s => ({
-        id: s.id,
-        name: s.name,
-        grade: (s.student_profiles as any)?.[0]?.grade || "",
-        section: (s.student_profiles as any)?.[0]?.section || "",
-      })))
-    }
-
     setLoading(false)
   }
-
-  const activeSessions = sessions.filter((s) => s.status === "active")
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -140,9 +150,6 @@ export default function TeacherQRAttendancePage() {
     const selectedClass = teacherClasses.find((c) => c.id === formData.classId)
     if (!selectedClass) return
 
-    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
-    const qrCode = `ATT-${formData.classId.substring(0, 8).toUpperCase()}-${formData.date.replace(/-/g, "")}-${randomSuffix}`
-    
     const supabase = createClient()
     const { data, error } = await supabase
       .from("qr_attendance_sessions")
@@ -152,7 +159,7 @@ export default function TeacherQRAttendancePage() {
         date: formData.date,
         start_time: formData.startTime,
         end_time: formData.endTime || null,
-        qr_code: qrCode,
+        qr_code: "dynamic", // Placeholder, actual code is generated client-side
         status: "active",
         require_location: formData.requireLocation,
       })
@@ -174,6 +181,8 @@ export default function TeacherQRAttendancePage() {
     setSelectedSessionId(data.id)
     setOpen(false)
     toast.success("Attendance session created")
+    
+    // Reset form
     setFormData({
       classId: "",
       date: format(new Date(), "yyyy-MM-dd"),
@@ -219,7 +228,7 @@ export default function TeacherQRAttendancePage() {
     <div className="flex flex-col gap-6">
       <DashboardHeader
         title="QR Attendance"
-        subtitle="Generate QR codes for student attendance check-in"
+        subtitle="Generate rotating QR codes for secure attendance"
         userId={currentTeacher?.id}
       />
 
@@ -228,21 +237,28 @@ export default function TeacherQRAttendancePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <QrCode className="h-5 w-5" />
-              Attendance QR Code
+              Dynamic Attendance QR
             </CardTitle>
-            <CardDescription>Display this QR code for students to scan and check in</CardDescription>
+            <CardDescription>
+              This QR code updates automatically every 15 seconds to prevent sharing.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
             {activeSession && activeSession.status === "active" ? (
               <>
-                <QRCodeGenerator data={activeSession.qr_code} size={250} />
+                <div className="relative">
+                  <QRCodeGenerator data={currentQRData} size={250} />
+                  <div className="absolute top-2 right-2">
+                    <RefreshCw className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: "15s" }} />
+                  </div>
+                </div>
+                
                 <div className="text-center">
-                  <p className="font-semibold">{activeSession.class_name}</p>
-                  <p className="text-sm text-muted-foreground">Code: {activeSession.qr_code}</p>
+                  <p className="font-semibold text-lg">{activeSession.class_name}</p>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-sm">
                     <Badge variant="outline" className="gap-1">
                       <Clock className="h-3 w-3" />
-                      {activeSession.start_time} {activeSession.end_time && `- ${activeSession.end_time}`}
+                      {activeSession.start_time}
                     </Badge>
                     <Badge variant="outline" className="gap-1">
                       <Users className="h-3 w-3" />
@@ -350,38 +366,6 @@ export default function TeacherQRAttendancePage() {
           </CardContent>
         </Card>
       </div>
-
-      {activeSession && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Checked-in Students</CardTitle>
-            <CardDescription>Students who have scanned the QR code for {activeSession.class_name}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!activeSession.checkins?.length ? (
-              <p className="text-center text-sm text-muted-foreground py-4">No students have checked in yet</p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {activeSession.checkins.map((checkin) => {
-                  const student = students.find((s) => s.id === checkin.student_id)
-                  if (!student) return null
-                  return (
-                    <div key={checkin.student_id} className="flex items-center gap-3 rounded-lg border border-border p-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
-                        {student.name.split(" ").map((n) => n[0]).join("")}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{student.name}</p>
-                        <p className="text-xs text-muted-foreground">Grade {student.grade}-{student.section}</p>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

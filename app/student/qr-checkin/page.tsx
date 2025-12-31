@@ -6,8 +6,6 @@ import { toast } from "sonner"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { QRScanner } from "@/components/qr-scanner"
 import { QrCode, Camera, XCircle, Clock, MapPin, Navigation, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react"
@@ -36,7 +34,6 @@ interface CheckinRecord {
 export default function StudentQRCheckinPage() {
   const { location: schoolLocation, isWithinRange, getDistanceFromSchool } = useSchoolLocationStore()
   const [showScanner, setShowScanner] = useState(false)
-  const [manualCode, setManualCode] = useState("")
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
   const [userLocation, setUserLocation] = useState<LocationState>({ status: "idle" })
   const [isInRange, setIsInRange] = useState<boolean | null>(null)
@@ -112,35 +109,22 @@ export default function StudentQRCheckinPage() {
     )
   }
 
-  const handleScan = async (code: string) => {
+  const handleScan = async (qrData: string) => {
     if (!currentStudent || submitting) return
     setSubmitting(true)
     setShowScanner(false)
-    
-    const supabase = createClient()
-    
-    // Find the session by QR code
-    const { data: session, error: sessionError } = await supabase
-      .from("qr_attendance_sessions")
-      .select("id, status, require_location, class:classes (name)")
-      .eq("qr_code", code)
-      .single()
-
-    if (sessionError || !session) {
-      setResult({ success: false, message: "Invalid QR code. Please try again." })
-      setSubmitting(false)
-      return
-    }
+    setResult(null)
 
     try {
       // Use the secure API route for check-in
+      // Send the raw QR data (which contains timestamp) for server validation
       const response = await fetch("/api/student/check-in", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          sessionId: session.id,
+          qrData,
           latitude: userLocation.latitude,
           longitude: userLocation.longitude,
         }),
@@ -152,7 +136,7 @@ export default function StudentQRCheckinPage() {
         throw new Error(data.error || "Failed to check in")
       }
 
-      setResult({ success: true, message: `Successfully checked in to ${(session.class as any)?.name}!` })
+      setResult({ success: true, message: "Successfully checked in!" })
       toast.success("Check-in successful!")
       fetchUser() // Refresh list
     } catch (error: any) {
@@ -160,14 +144,6 @@ export default function StudentQRCheckinPage() {
       toast.error("Check-in failed", { description: error.message })
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const handleManualCheckIn = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (manualCode) {
-      handleScan(manualCode)
-      setManualCode("")
     }
   }
 
@@ -243,22 +219,9 @@ export default function StudentQRCheckinPage() {
               <Camera className="mr-2 h-5 w-5" />Scan QR Code
             </Button>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or enter code manually</span>
-              </div>
+            <div className="text-xs text-center text-muted-foreground">
+              QR codes are time-sensitive. Please scan the current code displayed.
             </div>
-
-            <form onSubmit={handleManualCheckIn} className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="code">Attendance Code</Label>
-                <Input id="code" value={manualCode} onChange={(e) => setManualCode(e.target.value.toUpperCase())} placeholder="e.g., ATT-XXXXXXXX-20241219-0900" />
-              </div>
-              <Button type="submit" variant="outline" className="w-full" disabled={!manualCode || submitting}>
-                {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Submit Code
-              </Button>
-            </form>
 
             {result && (
               <div className={`flex items-center gap-2 rounded-lg p-3 ${result.success ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"}`}>

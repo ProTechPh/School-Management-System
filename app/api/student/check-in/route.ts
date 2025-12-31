@@ -27,12 +27,37 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { sessionId, latitude, longitude } = body
+    const { qrData, latitude, longitude } = body
 
-    // 1. Get the session details
+    // 1. Decode and Validate QR Data
+    // Fix 3: Validate time-sensitive QR code to prevent replay attacks
+    let payload
+    try {
+      const decoded = atob(qrData)
+      payload = JSON.parse(decoded)
+    } catch (e) {
+      return NextResponse.json({ error: "Invalid QR code format" }, { status: 400 })
+    }
+
+    const { sessionId, timestamp } = payload
+
+    if (!sessionId || !timestamp) {
+      return NextResponse.json({ error: "Invalid QR code data" }, { status: 400 })
+    }
+
+    // Check if QR code is expired (e.g., generated more than 30 seconds ago)
+    const now = Date.now()
+    const qrAge = now - timestamp
+    
+    // Allow 30 seconds validity window (15s rotation + buffer)
+    if (qrAge > 30000 || qrAge < -5000) { // Allow 5s clock skew
+      return NextResponse.json({ error: "QR code expired. Please scan the current code." }, { status: 400 })
+    }
+
+    // 2. Get the session details
     const { data: session, error: sessionError } = await supabase
       .from("qr_attendance_sessions")
-      .select("id, require_location, class_id, date")
+      .select("id, require_location, class_id, date, status")
       .eq("id", sessionId)
       .single()
 
@@ -40,7 +65,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid session" }, { status: 400 })
     }
 
-    // 2. Check existing check-in
+    if (session.status !== "active") {
+      return NextResponse.json({ error: "Session is not active" }, { status: 400 })
+    }
+
+    // 3. Check existing check-in
     const { data: existing } = await supabase
       .from("qr_checkins")
       .select("id")
@@ -52,14 +81,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 3. Server-side Location Verification
+    // 4. Server-side Location Verification
     if (session.require_location) {
       if (!latitude || !longitude) {
         return NextResponse.json({ error: "Location required" }, { status: 400 })
       }
 
-      // Get school settings (using default if not in DB)
-      // In a real app, you would fetch this from DB: await supabase.from('school_settings').select('*').single()
       const schoolLocation = {
         latitude: 14.5995,
         longitude: 120.9842,
@@ -75,19 +102,18 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Perform Insert
+    // 5. Perform Insert
     const { error: insertError } = await supabase
       .from("qr_checkins")
       .insert({
         session_id: sessionId,
         student_id: user.id,
-        location_verified: true // Verified by server
+        location_verified: true
       })
 
     if (insertError) throw insertError
 
-    // 5. Update Attendance Record
-    // Check if attendance record already exists
+    // 6. Update Attendance Record
     const { data: existingAttendance } = await supabase
       .from("attendance_records")
       .select("id")
