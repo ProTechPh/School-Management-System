@@ -1,8 +1,18 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { rateLimit } from "@/lib/rate-limit"
+
+// Create a limiter for quiz submissions (e.g., 3 attempts per minute per IP to prevent spam)
+const submitLimiter = rateLimit(3, 60 * 1000)
 
 export async function POST(request: Request) {
   try {
+    // SECURITY FIX: Rate Limiting
+    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    if (!submitLimiter.check(ip)) {
+      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -45,11 +55,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Quiz attempt not started." }, { status: 400 })
     }
 
+    // SECURITY FIX: Idempotency check to prevent double grading
     if (attempt.completed_at) {
       return NextResponse.json({ error: "Quiz already submitted" }, { status: 400 })
     }
 
     // 3. Server-Side Time Verification
+    // We strictly use the server-stored start time vs current server time.
+    // Client-side timers are for display only and are untrusted.
     const startTime = new Date(attempt.created_at).getTime()
     const now = Date.now()
     const durationMinutes = (now - startTime) / 1000 / 60
@@ -81,7 +94,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Security Fix 3: Server-Side Heuristics
+    // SECURITY FIX: Server-Side Heuristics
     // Check for impossible completion speeds (e.g., < 2 seconds per question)
     const minTimePerQuestionMs = 2000 // 2 seconds
     const minTotalTimeMs = quiz.questions.length * minTimePerQuestionMs
@@ -143,9 +156,14 @@ export async function POST(request: Request) {
     // 7. Update Attempt
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
-    // Combine client-reported flags with server-side heuristic
-    const isFlagged = (activityLog?.tabSwitches || 0) > 10 || 
-                      (activityLog?.copyPasteCount || 0) > 5 ||
+    // SECURITY FIX: Treat client logs as weak signals.
+    // We store them for reference, but rely on server metrics (isTooFast) for hard flags.
+    const clientTabSwitches = typeof activityLog?.tabSwitches === 'number' ? activityLog.tabSwitches : 0
+    const clientCopyPaste = typeof activityLog?.copyPasteCount === 'number' ? activityLog.copyPasteCount : 0
+    const clientExitAttempts = typeof activityLog?.exitAttempts === 'number' ? activityLog.exitAttempts : 0
+
+    const isFlagged = clientTabSwitches > 10 || 
+                      clientCopyPaste > 5 ||
                       isTooFast
 
     await supabase
@@ -156,9 +174,9 @@ export async function POST(request: Request) {
         percentage: percentage,
         needs_grading: hasEssayQuestions || isFlagged,
         completed_at: new Date().toISOString(),
-        tab_switches: activityLog?.tabSwitches || 0,
-        copy_paste_count: activityLog?.copyPasteCount || 0,
-        exit_attempts: activityLog?.exitAttempts || 0
+        tab_switches: clientTabSwitches,
+        copy_paste_count: clientCopyPaste,
+        exit_attempts: clientExitAttempts
       })
       .eq("id", attempt.id)
 

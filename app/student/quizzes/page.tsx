@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Clock, FileQuestion, CheckCircle, AlertCircle, Loader2, AlertTriangle } from "lucide-react"
+import { Clock, FileQuestion, CheckCircle, AlertCircle, Loader2, AlertTriangle, Info } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 interface QuizQuestion {
@@ -72,6 +72,7 @@ export default function StudentQuizzesPage() {
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [startingQuiz, setStartingQuiz] = useState(false)
   
+  // Client-side tracking (Advisory only)
   const activityLogRef = useRef({
     tabSwitches: 0,
     copyPasteCount: 0,
@@ -85,12 +86,20 @@ export default function StudentQuizzesPage() {
     const handleVisibilityChange = () => {
       if (document.hidden && takingQuiz && !showResults) {
         activityLogRef.current.tabSwitches++
+        toast.warning("Tab switching detected", { 
+          description: "Please stay on this tab. Activity is monitored.",
+          duration: 3000 
+        })
       }
     }
 
     const handleCopy = () => {
       if (takingQuiz && !showResults) {
         activityLogRef.current.copyPasteCount++
+        toast.warning("Copy/Paste detected", { 
+          description: "This activity is logged.",
+          duration: 3000 
+        })
       }
     }
 
@@ -349,8 +358,9 @@ export default function StudentQuizzesPage() {
                     </div>
                   </div>
                 </div>
-                <div className="px-1 py-1 text-xs text-center text-muted-foreground bg-muted/30">
-                  Client-reported metrics active. Do not switch tabs.
+                <div className="px-3 py-2 text-xs text-center text-muted-foreground bg-muted/30 flex items-center justify-center gap-2">
+                  <Info className="h-3 w-3" />
+                  <span>Time is tracked server-side. Do not leave this page.</span>
                 </div>
               </>
             )}

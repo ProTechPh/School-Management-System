@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Users, GraduationCap, BookOpen, TrendingUp, ClipboardCheck, Calendar, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface DashboardData {
   totalStudents: number
@@ -29,98 +30,24 @@ export default function AdminDashboard() {
     const fetchData = async () => {
       const supabase = createClient()
       
-      // Get current user
+      // Get current user ID for header
       const { data: { user } } = await supabase.auth.getUser()
       if (user) setUserId(user.id)
 
-      // Fetch counts
-      const [studentsRes, teachersRes, classesRes] = await Promise.all([
-        supabase.from("users").select("id", { count: "exact" }).eq("role", "student"),
-        supabase.from("users").select("id", { count: "exact" }).eq("role", "teacher"),
-        supabase.from("classes").select("id", { count: "exact" }),
-      ])
-
-      // Fetch recent students with profiles
-      const { data: recentStudents } = await supabase
-        .from("users")
-        .select("id, name, avatar, student_profiles(grade, section)")
-        .eq("role", "student")
-        .order("created_at", { ascending: false })
-        .limit(5)
-
-      // Fetch recent attendance
-      const { data: recentAttendance } = await supabase
-        .from("attendance_records")
-        .select("id, date, status, student:users!attendance_records_student_id_fkey(name)")
-        .order("date", { ascending: false })
-        .limit(5)
-
-      // Fetch top grades
-      const { data: topGrades } = await supabase
-        .from("grades")
-        .select("id, score, student:users!grades_student_id_fkey(name), class:classes(subject)")
-        .order("score", { ascending: false })
-        .limit(5)
-
-      // Fetch classes with teacher info
-      const { data: classes } = await supabase
-        .from("classes")
-        .select("id, name, subject, room, teacher:users!classes_teacher_id_fkey(name)")
-        .limit(6)
-
-      // Get class student counts
-      const { data: classCounts } = await supabase
-        .from("class_students")
-        .select("class_id")
-
-      const countMap: Record<string, number> = {}
-      classCounts?.forEach(c => {
-        countMap[c.class_id] = (countMap[c.class_id] || 0) + 1
-      })
-
-      // Calculate attendance rate
-      const { data: attendanceData } = await supabase
-        .from("attendance_records")
-        .select("status")
-      
-      const totalRecords = attendanceData?.length || 0
-      const presentRecords = attendanceData?.filter(a => a.status === "present").length || 0
-      const attendanceRate = totalRecords > 0 ? Math.round((presentRecords / totalRecords) * 100 * 10) / 10 : 0
-
-      setData({
-        totalStudents: studentsRes.count || 0,
-        totalTeachers: teachersRes.count || 0,
-        totalClasses: classesRes.count || 0,
-        attendanceRate,
-        recentStudents: recentStudents?.map(s => ({
-          id: s.id,
-          name: s.name,
-          avatar: s.avatar,
-          grade: (s.student_profiles as any)?.[0]?.grade || "N/A",
-          section: (s.student_profiles as any)?.[0]?.section || "N/A",
-        })) || [],
-        recentAttendance: recentAttendance?.map(a => ({
-          id: a.id,
-          student_name: (a.student as any)?.name || "Unknown",
-          date: a.date,
-          status: a.status,
-        })) || [],
-        topGrades: topGrades?.map(g => ({
-          id: g.id,
-          student_name: (g.student as any)?.name || "Unknown",
-          subject: (g.class as any)?.subject || "Unknown",
-          score: g.score,
-        })) || [],
-        classes: classes?.map(c => ({
-          id: c.id,
-          name: c.name,
-          teacher_name: (c.teacher as any)?.name || "Unassigned",
-          subject: c.subject,
-          room: c.room,
-          student_count: countMap[c.id] || 0,
-        })) || [],
-      })
-      setLoading(false)
+      // SECURITY FIX: Fetch dashboard data from secure API route
+      try {
+        const response = await fetch("/api/admin/dashboard")
+        if (!response.ok) {
+          throw new Error("Failed to load dashboard data")
+        }
+        const dashboardData = await response.json()
+        setData(dashboardData)
+      } catch (error) {
+        console.error(error)
+        toast.error("Failed to load dashboard data")
+      } finally {
+        setLoading(false)
+      }
     }
 
     fetchData()
@@ -175,7 +102,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 ))}
-                {data?.recentStudents.length === 0 && (
+                {(!data?.recentStudents || data.recentStudents.length === 0) && (
                   <p className="text-sm text-muted-foreground text-center py-4">No students yet</p>
                 )}
               </div>
@@ -204,7 +131,7 @@ export default function AdminDashboard() {
                     </Badge>
                   </div>
                 ))}
-                {data?.recentAttendance.length === 0 && (
+                {(!data?.recentAttendance || data.recentAttendance.length === 0) && (
                   <p className="text-sm text-muted-foreground text-center py-4">No attendance records</p>
                 )}
               </div>
@@ -231,7 +158,7 @@ export default function AdminDashboard() {
                     <Badge variant="outline" className="font-semibold">{grade.score}%</Badge>
                   </div>
                 ))}
-                {data?.topGrades.length === 0 && (
+                {(!data?.topGrades || data.topGrades.length === 0) && (
                   <p className="text-sm text-muted-foreground text-center py-4">No grades yet</p>
                 )}
               </div>
@@ -261,7 +188,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ))}
-              {data?.classes.length === 0 && (
+              {(!data?.classes || data.classes.length === 0) && (
                 <p className="text-sm text-muted-foreground col-span-3 text-center py-4">No classes yet</p>
               )}
             </div>

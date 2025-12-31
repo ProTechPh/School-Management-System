@@ -33,7 +33,30 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
-    return NextResponse.json({ students: data })
+    // SECURITY FIX: DTO Pattern
+    // Explicitly map database fields to response object to avoid accidental leaks of new schema columns
+    const safeStudents = data.map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      email: s.email,
+      avatar: s.avatar,
+      address: s.address,
+      // Map profile fields safely
+      student_profiles: s.student_profiles ? s.student_profiles.map((p: any) => ({
+        grade: p.grade,
+        section: p.section,
+        lrn: p.lrn,
+        father_name: p.father_name,
+        father_contact: p.father_contact,
+        mother_name: p.mother_name,
+        mother_contact: p.mother_contact,
+        guardian_name: p.guardian_name,
+        guardian_contact: p.guardian_contact,
+        enrollment_date: p.enrollment_date
+      })) : []
+    }))
+
+    return NextResponse.json({ students: safeStudents })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
