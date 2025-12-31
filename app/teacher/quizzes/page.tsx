@@ -136,6 +136,7 @@ export default function TeacherQuizzesPage() {
   })
 
   const [questionType, setQuestionType] = useState<QuestionType>("multiple-choice")
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -192,8 +193,7 @@ export default function TeacherQuizzesPage() {
       setQuizzes(quizzesData as Quiz[])
     }
 
-    // Fetch attempts - Ensure strict filtering by teacher's quizzes
-    // We filter by joining with quizzes table and checking teacher_id
+    // Fetch attempts
     const { data: attemptsData } = await supabase
       .from("quiz_attempts")
       .select(`
@@ -201,7 +201,7 @@ export default function TeacherQuizzesPage() {
         student:users!quiz_attempts_student_id_fkey (id, name),
         quiz:quizzes!inner (teacher_id)
       `)
-      .eq("quiz.teacher_id", user.id) // Filter server-side
+      .eq("quiz.teacher_id", user.id)
       .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
 
@@ -291,62 +291,40 @@ export default function TeacherQuizzesPage() {
     const selectedClass = teacherClasses.find((c) => c.id === newQuiz.classId)
     if (!selectedClass || !newQuiz.title || newQuiz.questions.length === 0) return
 
-    const supabase = createClient()
+    setCreating(true)
 
-    // Create quiz
-    const { data: quizData, error: quizError } = await supabase
-      .from("quizzes")
-      .insert({
-        title: newQuiz.title,
-        class_id: newQuiz.classId,
-        teacher_id: userId,
-        description: newQuiz.description || null,
-        duration: newQuiz.duration,
-        due_date: newQuiz.dueDate || null,
-        status: "published",
+    try {
+      const response = await fetch("/api/teacher/create-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newQuiz)
       })
-      .select()
-      .single()
 
-    if (quizError || !quizData) {
-      toast.error("Failed to create quiz", { description: quizError?.message })
-      return
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create quiz")
+      }
+
+      // Add notification for students
+      addNotification({
+        userId: "student",
+        userRole: "student",
+        title: "New Quiz Available",
+        message: `A new quiz '${newQuiz.title}' has been published for ${selectedClass.name}`,
+        type: "quiz",
+        read: false,
+        link: "/student/quizzes",
+      })
+
+      setNewQuiz({ title: "", classId: "", description: "", duration: 30, dueDate: "", questions: [] })
+      setIsCreateOpen(false)
+      toast.success("Quiz created successfully")
+      fetchData()
+    } catch (error: any) {
+      toast.error("Failed to create quiz", { description: error.message })
+    } finally {
+      setCreating(false)
     }
-
-    // Create questions
-    const questionsToInsert = newQuiz.questions.map((q, index) => ({
-      quiz_id: quizData.id,
-      type: q.type,
-      question: q.question,
-      options: q.options || null,
-      correct_answer: q.correctAnswer !== undefined ? String(q.correctAnswer) : null,
-      points: q.points,
-      case_sensitive: q.caseSensitive || false,
-      sort_order: index,
-    }))
-
-    const { error: questionsError } = await supabase.from("quiz_questions").insert(questionsToInsert)
-    
-    if (questionsError) {
-      toast.error("Failed to add questions", { description: questionsError.message })
-      return
-    }
-
-    // Add notification for students
-    addNotification({
-      userId: "student",
-      userRole: "student",
-      title: "New Quiz Available",
-      message: `A new quiz '${newQuiz.title}' has been published for ${selectedClass.name}`,
-      type: "quiz",
-      read: false,
-      link: "/student/quizzes",
-    })
-
-    setNewQuiz({ title: "", classId: "", description: "", duration: 30, dueDate: "", questions: [] })
-    setIsCreateOpen(false)
-    toast.success("Quiz created successfully")
-    fetchData()
   }
 
   const getQuizAttempts = (quizId: string) => {
@@ -766,8 +744,9 @@ export default function TeacherQuizzesPage() {
                   </DialogClose>
                   <Button
                     onClick={handleCreateQuiz}
-                    disabled={!newQuiz.title || !newQuiz.classId || newQuiz.questions.length === 0}
+                    disabled={creating || !newQuiz.title || !newQuiz.classId || newQuiz.questions.length === 0}
                   >
+                    {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Create Quiz
                   </Button>
                 </div>

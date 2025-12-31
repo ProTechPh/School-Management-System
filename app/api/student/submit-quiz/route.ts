@@ -137,9 +137,13 @@ export async function POST(request: Request) {
     // 7. Update Attempt
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
-    // If strict time check failed, we force 'needs_grading' to true regardless of question types
-    // We can also override client-side activity logs if they seem suspiciously clean given the timing violation
+    // Force grading if strict time check failed
     const finalNeedsGrading = hasEssayQuestions || needsManualReview
+
+    // Security: If server detects anomaly (time violation), force a flag in the DB logs
+    // This ensures the teacher sees the "Suspicious Activity" alert even if client logs were tampered with
+    const forcedTabSwitches = (activityLog?.tabSwitches || 0) + (needsManualReview ? 5 : 0)
+    const forcedExitAttempts = (activityLog?.exitAttempts || 0) + (needsManualReview ? 1 : 0)
 
     await supabase
       .from("quiz_attempts")
@@ -150,9 +154,9 @@ export async function POST(request: Request) {
         needs_grading: finalNeedsGrading,
         completed_at: new Date().toISOString(),
         // Trust server heuristics over client logs if suspicious
-        tab_switches: activityLog?.tabSwitches || 0,
+        tab_switches: forcedTabSwitches,
         copy_paste_count: activityLog?.copyPasteCount || 0,
-        exit_attempts: (activityLog?.exitAttempts || 0) + (needsManualReview ? 1 : 0) // Increment exit attempts if time flagged
+        exit_attempts: forcedExitAttempts
       })
       .eq("id", attempt.id)
 

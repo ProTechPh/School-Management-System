@@ -39,34 +39,47 @@ export async function middleware(request: NextRequest) {
   const protectedPaths = ["/admin", "/teacher", "/student", "/test-supabase"]
   const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
-  if (isProtected) {
-    
-    if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url))
-    }
-
-    // Check role from metadata or DB
+  if (user) {
+    // Check role and password status from DB
     const { data: userData } = await supabase
       .from("users")
-      .select("role")
+      .select("role, must_change_password")
       .eq("id", user.id)
       .single()
     
-    const role = userData?.role
+    // Enforce Password Change Policy
+    // If user must change password, redirect them to /change-password
+    // Allow access to /change-password itself and API routes needed for it
+    if (
+      userData?.must_change_password && 
+      !request.nextUrl.pathname.startsWith("/change-password") &&
+      !request.nextUrl.pathname.startsWith("/api/") &&
+      !request.nextUrl.pathname.startsWith("/_next/") &&
+      request.nextUrl.pathname !== "/favicon.ico"
+    ) {
+      return NextResponse.redirect(new URL("/change-password", request.url))
+    }
 
-    if (request.nextUrl.pathname.startsWith("/admin") && role !== "admin") {
-      return NextResponse.redirect(new URL("/", request.url))
+    if (isProtected) {
+      const role = userData?.role
+
+      if (request.nextUrl.pathname.startsWith("/admin") && role !== "admin") {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+      if (request.nextUrl.pathname.startsWith("/teacher") && role !== "teacher") {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+      if (request.nextUrl.pathname.startsWith("/student") && role !== "student") {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+      // /test-supabase is restricted to admins only for extra security
+      if (request.nextUrl.pathname.startsWith("/test-supabase") && role !== "admin") {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
     }
-    if (request.nextUrl.pathname.startsWith("/teacher") && role !== "teacher") {
-      return NextResponse.redirect(new URL("/", request.url))
-    }
-    if (request.nextUrl.pathname.startsWith("/student") && role !== "student") {
-      return NextResponse.redirect(new URL("/", request.url))
-    }
-    // /test-supabase is restricted to admins only for extra security
-    if (request.nextUrl.pathname.startsWith("/test-supabase") && role !== "admin") {
-      return NextResponse.redirect(new URL("/", request.url))
-    }
+  } else if (isProtected) {
+    // No user, redirect to login
+    return NextResponse.redirect(new URL("/login", request.url))
   }
 
   return response
@@ -78,6 +91,7 @@ export const config = {
     "/teacher/:path*",
     "/student/:path*",
     "/test-supabase/:path*",
+    "/change-password",
     "/login"
   ],
 }
