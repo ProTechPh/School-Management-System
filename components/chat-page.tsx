@@ -34,7 +34,7 @@ interface Message {
 
 interface ChatPageProps {
   searchPlaceholder?: string
-  searchRoleFilter?: string[] // Only search these roles (e.g., ["teacher"] for students)
+  searchRoleFilter?: string[]
 }
 
 export function ChatPage({ searchPlaceholder = "Search users to chat...", searchRoleFilter }: ChatPageProps) {
@@ -50,7 +50,6 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
   const scrollRef = useRef<HTMLDivElement>(null)
   const selectedUserRef = useRef<ChatUser | null>(null)
 
-  // Keep ref in sync with state for use in subscription callback
   useEffect(() => {
     selectedUserRef.current = selectedUser
   }, [selectedUser])
@@ -59,7 +58,7 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
     fetchData()
   }, [])
 
-  // Setup realtime subscription
+  // Setup realtime subscription for new messages
   useEffect(() => {
     if (!currentUser) return
 
@@ -78,7 +77,6 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
         async (payload) => {
           const newMsg = payload.new as any
           
-          // Fetch sender info
           const { data: senderData } = await supabase
             .from("users")
             .select("id, name, avatar, role")
@@ -97,10 +95,8 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
             created_at: newMsg.created_at,
           }
 
-          // Add message to list
           setMessages(prev => [...prev, message])
 
-          // Update or add conversation
           setConversations(prev => {
             const existing = prev.find(c => c.id === senderData.id)
             if (existing) {
@@ -110,7 +106,6 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
                       ...c, 
                       lastMessage: newMsg.content, 
                       lastMessageAt: newMsg.created_at,
-                      // Only increment unread if not currently viewing this conversation
                       unreadCount: selectedUserRef.current?.id === senderData.id 
                         ? 0 
                         : (c.unreadCount || 0) + 1
@@ -130,7 +125,6 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
             }
           })
 
-          // If currently viewing this conversation, mark as read
           if (selectedUserRef.current?.id === senderData.id) {
             await supabase
               .from("chat_messages")
@@ -146,7 +140,6 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
     }
   }, [currentUser])
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -155,7 +148,6 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
 
   const fetchData = async () => {
     const supabase = createClient()
-    
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -166,59 +158,56 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
       .single()
     if (userData) setCurrentUser(userData)
 
-    // Fetch existing conversations
-    const { data: msgData } = await supabase
-      .from("chat_messages")
-      .select(`
-        id, sender_id, receiver_id, content, created_at, read,
-        sender:users!chat_messages_sender_id_fkey (id, name, avatar, role),
-        receiver:users!chat_messages_receiver_id_fkey (id, name, avatar, role)
-      `)
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order("created_at", { ascending: false })
-
-    if (msgData) {
-      const convMap = new Map<string, ChatUser>()
-      
-      msgData.forEach(m => {
-        const otherUser = m.sender_id === user.id 
-          ? m.receiver as any 
-          : m.sender as any
+    // Securely fetch messages via API
+    try {
+      const response = await fetch("/api/chat/messages")
+      if (response.ok) {
+        const { messages: msgData } = await response.json()
         
-        if (!otherUser) return
-        
-        if (!convMap.has(otherUser.id)) {
-          convMap.set(otherUser.id, {
-            id: otherUser.id,
-            name: otherUser.name,
-            avatar: otherUser.avatar,
-            role: otherUser.role,
-            lastMessage: m.content,
-            lastMessageAt: m.created_at,
-            unreadCount: 0,
+        if (msgData) {
+          const convMap = new Map<string, ChatUser>()
+          
+          msgData.forEach((m: any) => {
+            const otherUser = m.sender_id === user.id ? m.receiver : m.sender
+            
+            if (!otherUser) return
+            
+            if (!convMap.has(otherUser.id)) {
+              convMap.set(otherUser.id, {
+                id: otherUser.id,
+                name: otherUser.name,
+                avatar: otherUser.avatar,
+                role: otherUser.role,
+                lastMessage: m.content,
+                lastMessageAt: m.created_at,
+                unreadCount: 0,
+              })
+            }
+            
+            if (m.receiver_id === user.id && !m.read) {
+              const conv = convMap.get(otherUser.id)!
+              conv.unreadCount = (conv.unreadCount || 0) + 1
+            }
           })
+          
+          setConversations(Array.from(convMap.values()))
+          
+          setMessages(msgData.map((m: any) => ({
+            id: m.id,
+            sender_id: m.sender_id,
+            sender_name: m.sender?.name || "Unknown",
+            sender_avatar: m.sender?.avatar,
+            receiver_id: m.receiver_id,
+            content: m.content,
+            created_at: m.created_at,
+          })).reverse())
         }
-        
-        if (m.receiver_id === user.id && !m.read) {
-          const conv = convMap.get(otherUser.id)!
-          conv.unreadCount = (conv.unreadCount || 0) + 1
-        }
-      })
-      
-      setConversations(Array.from(convMap.values()))
-      
-      setMessages(msgData.map(m => ({
-        id: m.id,
-        sender_id: m.sender_id,
-        sender_name: (m.sender as any)?.name || "Unknown",
-        sender_avatar: (m.sender as any)?.avatar,
-        receiver_id: m.receiver_id,
-        content: m.content,
-        created_at: m.created_at,
-      })).reverse())
+      }
+    } catch (error) {
+      console.error("Failed to fetch messages", error)
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const searchUsers = useDebouncedCallback(async (query: string) => {
@@ -231,13 +220,8 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
     setSearching(true)
     
     try {
-      // Use secure API route instead of direct DB query
       const params = new URLSearchParams({ query })
-      
-      // Apply role filter if specified
       if (searchRoleFilter && searchRoleFilter.length > 0) {
-        // Just take the first one for now as query param, or handle multiple
-        // For simplicity in this implementation, we handle single role filtering or custom logic
         if (searchRoleFilter.length === 1) {
           params.append("role", searchRoleFilter[0])
         }
