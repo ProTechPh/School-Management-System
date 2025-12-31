@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import crypto from "crypto"
 
 // Haversine formula to calculate distance
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -30,7 +31,6 @@ export async function POST(request: Request) {
     const { qrData, latitude, longitude } = body
 
     // 1. Decode and Validate QR Data
-    // Fix 3: Validate time-sensitive QR code to prevent replay attacks
     let payload
     try {
       const decoded = atob(qrData)
@@ -39,10 +39,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid QR code format" }, { status: 400 })
     }
 
-    const { sessionId, timestamp } = payload
+    const { sessionId, timestamp, signature } = payload
 
-    if (!sessionId || !timestamp) {
+    if (!sessionId || !timestamp || !signature) {
       return NextResponse.json({ error: "Invalid QR code data" }, { status: 400 })
+    }
+
+    // Verify HMAC signature
+    const secret = process.env.QR_SECRET || "default-secure-secret-key-change-in-prod"
+    const dataToVerify = `${sessionId}:${timestamp}`
+    const expectedSignature = crypto.createHmac("sha256", secret).update(dataToVerify).digest("hex")
+
+    if (signature !== expectedSignature) {
+      return NextResponse.json({ error: "Invalid QR code signature" }, { status: 403 })
     }
 
     // Check if QR code is expired (e.g., generated more than 30 seconds ago)
@@ -87,10 +96,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Location required" }, { status: 400 })
       }
 
+      // Fetch school location settings from DB
+      const { data: settings } = await supabase
+        .from("school_settings")
+        .select("latitude, longitude, radius_meters")
+        .single()
+
       const schoolLocation = {
-        latitude: 14.5995,
-        longitude: 120.9842,
-        radiusMeters: 500
+        latitude: settings?.latitude || 14.5995,
+        longitude: settings?.longitude || 120.9842,
+        radiusMeters: settings?.radius_meters || 500
       }
 
       const distance = calculateDistance(latitude, longitude, schoolLocation.latitude, schoolLocation.longitude)

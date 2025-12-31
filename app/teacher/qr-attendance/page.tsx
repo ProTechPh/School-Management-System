@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { QRCodeGenerator } from "@/components/qr-code-generator"
 import { QrCode, Plus, Users, Clock, StopCircle, MapPin, Loader2, RefreshCw } from "lucide-react"
-import { useSchoolLocationStore } from "@/lib/school-location-store"
 import { createClient } from "@/lib/supabase/client"
 import { format } from "date-fns"
 import { Switch } from "@/components/ui/switch"
@@ -53,7 +52,6 @@ export default function TeacherQRAttendancePage() {
     requireLocation: true,
   })
   
-  // Rotating QR interval
   const rotationIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -63,11 +61,10 @@ export default function TeacherQRAttendancePage() {
     }
   }, [])
 
-  // Start rotating QR code when session is selected
   useEffect(() => {
     if (selectedSessionId) {
       updateQRCode()
-      rotationIntervalRef.current = setInterval(updateQRCode, 15000) // Rotate every 15s
+      rotationIntervalRef.current = setInterval(updateQRCode, 15000)
     } else {
       if (rotationIntervalRef.current) clearInterval(rotationIntervalRef.current)
     }
@@ -76,21 +73,23 @@ export default function TeacherQRAttendancePage() {
     }
   }, [selectedSessionId])
 
-  const updateQRCode = () => {
+  const updateQRCode = async () => {
     if (!selectedSessionId) return
     
-    // Generate a time-sensitive token
-    // Format: session_id|timestamp|signature
-    // In a real app, signature would be HMAC. Here we rely on timestamp freshness check on server.
-    const timestamp = Date.now()
-    const payload = JSON.stringify({
-      sessionId: selectedSessionId,
-      timestamp: timestamp
-    })
-    
-    // Simple encoding to make it look like a token
-    const encoded = btoa(payload)
-    setCurrentQRData(encoded)
+    try {
+      const response = await fetch("/api/teacher/generate-qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: selectedSessionId }),
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setCurrentQRData(data.token)
+      }
+    } catch (error) {
+      console.error("Failed to generate QR token", error)
+    }
   }
 
   const fetchData = async () => {
@@ -122,7 +121,6 @@ export default function TeacherQRAttendancePage() {
       setTeacherClasses(classData)
     }
 
-    // Fetch QR sessions from database
     const { data: sessionData } = await supabase
       .from("qr_attendance_sessions")
       .select(`
@@ -159,7 +157,7 @@ export default function TeacherQRAttendancePage() {
         date: formData.date,
         start_time: formData.startTime,
         end_time: formData.endTime || null,
-        qr_code: "dynamic", // Placeholder, actual code is generated client-side
+        qr_code: "dynamic", 
         status: "active",
         require_location: formData.requireLocation,
       })
@@ -182,7 +180,6 @@ export default function TeacherQRAttendancePage() {
     setOpen(false)
     toast.success("Attendance session created")
     
-    // Reset form
     setFormData({
       classId: "",
       date: format(new Date(), "yyyy-MM-dd"),
@@ -247,7 +244,7 @@ export default function TeacherQRAttendancePage() {
             {activeSession && activeSession.status === "active" ? (
               <>
                 <div className="relative">
-                  <QRCodeGenerator data={currentQRData} size={250} />
+                  {currentQRData && <QRCodeGenerator data={currentQRData} size={250} />}
                   <div className="absolute top-2 right-2">
                     <RefreshCw className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: "15s" }} />
                   </div>

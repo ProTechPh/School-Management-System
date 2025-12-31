@@ -11,13 +11,10 @@ import { GraduationCap, Loader2, Eye, EyeOff } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
 
-// Convert LRN to DepEd email format
 const formatLoginEmail = (input: string): string => {
-  // If input is 12-digit LRN, convert to DepEd email format
   if (/^\d{12}$/.test(input.trim())) {
     return `${input.trim()}@r1.deped.gov.ph`
   }
-  // Otherwise return as-is (regular email)
   return input.trim()
 }
 
@@ -34,79 +31,58 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
 
-    const supabase = createClient()
-    
-    // Convert LRN to email format if needed
     const email = formatLoginEmail(emailOrLrn)
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      // Use secure API route with rate limiting
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
 
-    if (authError) {
-      setError(authError.message)
-      setLoading(false)
-      return
-    }
+      const data = await response.json()
 
-    if (data.user) {
-      // Small delay to ensure session is established
-      await new Promise(resolve => setTimeout(resolve, 100))
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed")
+      }
+
+      // Login successful, check user status
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
       
-      // Get user role, status, and password change requirement from users table
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("role, is_active, must_change_password")
-        .eq("id", data.user.id)
-        .single()
+      if (user) {
+        const { data: userData } = await supabase
+          .from("users")
+          .select("role, is_active, must_change_password")
+          .eq("id", user.id)
+          .single()
 
-      if (userError) {
-        console.error("Error fetching user role:", userError)
-        // Try getting role from auth metadata as fallback
-        const role = data.user.user_metadata?.role
-        if (role) {
-          toast.success("Welcome back!")
-          router.push(`/${role}`)
+        if (userData?.is_active === false) {
+          await supabase.auth.signOut()
+          setError("Your account has been disabled. Please contact your administrator.")
           setLoading(false)
           return
         }
-        setError("Unable to fetch user data. Please try again.")
-        setLoading(false)
-        return
-      }
 
-      // Check if account is disabled
-      if (userData?.is_active === false) {
-        await supabase.auth.signOut()
-        setError("Your account has been disabled. Please contact your administrator.")
-        setLoading(false)
-        return
-      }
+        if (userData?.must_change_password === true) {
+          router.push("/change-password")
+          return
+        }
 
-      // Check if user must change password on first login
-      if (userData?.must_change_password === true) {
-        router.push("/change-password")
-        setLoading(false)
-        return
-      }
-
-      toast.success("Welcome back!")
-      
-      if (userData?.role) {
-        router.push(`/${userData.role}`)
-      } else {
-        // Fallback to auth metadata
-        const role = data.user.user_metadata?.role
-        if (role) {
-          router.push(`/${role}`)
+        toast.success("Welcome back!")
+        
+        if (userData?.role) {
+          router.push(`/${userData.role}`)
         } else {
           router.push("/")
         }
       }
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   return (

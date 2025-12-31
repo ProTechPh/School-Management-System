@@ -37,35 +37,35 @@ export default function StudentGradesPage() {
 
   const fetchData = async () => {
     const supabase = createClient()
-    
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
-    const { data } = await supabase
-      .from("grades")
-      .select(`
-        id, class_id, type, score, max_score, percentage, grade, date,
-        class:classes (name)
-      `)
-      .eq("student_id", user.id)
-      .order("date", { ascending: false })
+    try {
+      // Use secure API route instead of direct DB query
+      const response = await fetch("/api/student/grades")
+      if (!response.ok) throw new Error("Failed to fetch grades")
+      
+      const { grades: data } = await response.json()
 
-    if (data) {
-      setGrades(data.map(g => ({
-        id: g.id,
-        class_id: g.class_id,
-        class_name: (g.class as any)?.name || "Unknown",
-        type: g.type,
-        score: g.score,
-        max_score: g.max_score,
-        percentage: g.percentage,
-        grade: g.grade,
-        date: g.date,
-      })))
+      if (data) {
+        setGrades(data.map((g: any) => ({
+          id: g.id,
+          class_id: g.class_id,
+          class_name: g.class?.name || "Unknown",
+          type: g.type,
+          score: g.score,
+          max_score: g.max_score,
+          percentage: g.percentage,
+          grade: g.grade,
+          date: g.date,
+        })))
+      }
+    } catch (error) {
+      console.error("Error fetching grades:", error)
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const overallAssessments = grades.map((g) => ({ type: g.type, percentage: g.percentage }))
