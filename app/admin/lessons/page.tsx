@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { FileText, Video, LinkIcon, File, Search, Eye, Loader2, ExternalLink } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface LessonMaterial {
   id: string
@@ -58,28 +59,31 @@ export default function AdminLessonsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    const { data: lessonData } = await supabase
-      .from("lessons")
-      .select(`
-        id, title, description, class_id,
-        class:classes (name),
-        teacher:users!lessons_teacher_id_fkey (name),
-        materials:lesson_materials (id, name, type, url)
-      `)
-      .order("created_at", { ascending: false })
-
-    if (lessonData) {
-      setLessons(lessonData.map(l => ({
-        id: l.id,
-        title: l.title,
-        description: l.description,
-        class_id: l.class_id,
-        class_name: (l.class as any)?.name || "Unknown",
-        teacher_name: (l.teacher as any)?.name || null,
-        materials: (l.materials as any) || [],
-      })))
+    // Use secure API route
+    try {
+      const response = await fetch("/api/admin/lessons")
+      if (response.ok) {
+        const { lessons: lessonData } = await response.json()
+        if (lessonData) {
+          setLessons(lessonData.map((l: any) => ({
+            id: l.id,
+            title: l.title,
+            description: l.description,
+            class_id: l.class_id,
+            class_name: l.class?.name || "Unknown",
+            teacher_name: l.teacher?.name || null,
+            materials: l.materials || [],
+          })))
+        }
+      } else {
+        throw new Error("Failed to fetch lessons")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to load lessons")
     }
 
+    // Fetch classes (can remain client-side or move to API if needed)
     const { data: classData } = await supabase
       .from("classes")
       .select("id, name")

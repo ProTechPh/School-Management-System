@@ -64,7 +64,8 @@ export default function TeacherQRAttendancePage() {
   useEffect(() => {
     if (selectedSessionId) {
       updateQRCode()
-      rotationIntervalRef.current = setInterval(updateQRCode, 15000)
+      // Security Fix: Rotate QR code every 5 seconds (was 15s)
+      rotationIntervalRef.current = setInterval(updateQRCode, 5000)
     } else {
       if (rotationIntervalRef.current) clearInterval(rotationIntervalRef.current)
     }
@@ -237,7 +238,7 @@ export default function TeacherQRAttendancePage() {
               Dynamic Attendance QR
             </CardTitle>
             <CardDescription>
-              This QR code updates automatically every 15 seconds to prevent sharing.
+              This QR code updates automatically every 5 seconds to prevent sharing.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
@@ -246,7 +247,7 @@ export default function TeacherQRAttendancePage() {
                 <div className="relative">
                   {currentQRData && <QRCodeGenerator data={currentQRData} size={250} />}
                   <div className="absolute top-2 right-2">
-                    <RefreshCw className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: "15s" }} />
+                    <RefreshCw className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: "5s" }} />
                   </div>
                 </div>
                 

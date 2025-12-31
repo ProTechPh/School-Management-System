@@ -40,7 +40,7 @@ interface Quiz {
   class_id: string
   class_name: string
   teacher_id: string | null
-  questions: QuizQuestion[]
+  questions?: QuizQuestion[] // Optional initially
 }
 
 interface QuizAttempt {
@@ -141,7 +141,8 @@ export default function StudentQuizzesPage() {
         const data = await response.json()
         setQuizzes(data.quizzes.map((q: any) => ({
           ...q,
-          class_name: q.class?.name || "Unknown"
+          class_name: q.class?.name || "Unknown",
+          questions: [] // Initialize empty, loaded on start
         })))
       }
     } catch (error) {
@@ -180,9 +181,17 @@ export default function StudentQuizzesPage() {
         throw new Error(error.error || "Failed to start quiz")
       }
 
-      setTakingQuiz(quiz)
+      const data = await response.json()
+      
+      // Load questions from response
+      const quizWithQuestions = {
+        ...quiz,
+        questions: data.questions
+      }
+
+      setTakingQuiz(quizWithQuestions)
       setCurrentQuestion(0)
-      const initialAnswers = quiz.questions.map(q => {
+      const initialAnswers = data.questions.map((q: any) => {
         if (q.type === "identification" || q.type === "essay") {
           return ""
         }
@@ -215,7 +224,7 @@ export default function StudentQuizzesPage() {
   }
 
   const handleSubmitQuiz = async () => {
-    if (!takingQuiz || isSubmitting) return
+    if (!takingQuiz || !takingQuiz.questions || isSubmitting) return
     setIsSubmitting(true)
 
     try {
@@ -387,7 +396,7 @@ export default function StudentQuizzesPage() {
               </div>
             )}
 
-            {takingQuiz && !showResults && takingQuiz.questions.length > 0 && (
+            {takingQuiz && !showResults && takingQuiz.questions && takingQuiz.questions.length > 0 && (
               <div className="py-4 flex-1 overflow-y-auto">
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
@@ -541,7 +550,7 @@ export default function StudentQuizzesPage() {
                     <div className="mb-4 flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <FileQuestion className="h-4 w-4" />
-                        <span>{quiz.questions.length} questions</span>
+                        <span>Questions hidden</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock className="h-4 w-4" />
@@ -566,7 +575,7 @@ export default function StudentQuizzesPage() {
                         <Button 
                           size="sm" 
                           onClick={() => handleStartQuiz(quiz)} 
-                          disabled={isPastDue || quiz.questions.length === 0 || startingQuiz}
+                          disabled={isPastDue || startingQuiz}
                         >
                           {startingQuiz ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start Quiz"}
                         </Button>

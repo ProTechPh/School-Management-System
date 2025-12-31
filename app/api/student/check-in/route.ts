@@ -61,12 +61,12 @@ export async function POST(request: Request) {
     }
 
     // Check if QR code is expired
-    // TIGHTENED SECURITY: Reduced validity window from 30s to 20s to prevent relay attacks
+    // TIGHTENED SECURITY: Reduced validity window to 10s (5s rotation + 5s buffer)
     const now = Date.now()
     const qrAge = now - timestamp
     
-    // Allow 20 seconds validity window (15s rotation + 5s buffer)
-    if (qrAge > 20000 || qrAge < -5000) { // Allow 5s clock skew
+    // Allow 10 seconds validity window
+    if (qrAge > 10000 || qrAge < -5000) { // Allow 5s clock skew
       return NextResponse.json({ error: "QR code expired. Please scan the current code." }, { status: 400 })
     }
 

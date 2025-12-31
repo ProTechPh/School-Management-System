@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Clock, FileQuestion, Search, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface Quiz {
   id: string
@@ -47,29 +48,31 @@ export default function AdminQuizzesPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    const { data: quizData } = await supabase
-      .from("quizzes")
-      .select(`
-        id, title, description, duration, due_date, status, class_id,
-        class:classes (name),
-        teacher:users!quizzes_teacher_id_fkey (name),
-        questions:quiz_questions (id)
-      `)
-      .order("created_at", { ascending: false })
-
-    if (quizData) {
-      setQuizzes(quizData.map(q => ({
-        id: q.id,
-        title: q.title,
-        description: q.description,
-        duration: q.duration,
-        due_date: q.due_date,
-        status: q.status,
-        class_id: q.class_id,
-        class_name: (q.class as any)?.name || "Unknown",
-        teacher_name: (q.teacher as any)?.name || null,
-        question_count: (q.questions as any)?.length || 0,
-      })))
+    // Use secure API route
+    try {
+      const response = await fetch("/api/admin/quizzes")
+      if (response.ok) {
+        const { quizzes: quizData } = await response.json()
+        if (quizData) {
+          setQuizzes(quizData.map((q: any) => ({
+            id: q.id,
+            title: q.title,
+            description: q.description,
+            duration: q.duration,
+            due_date: q.due_date,
+            status: q.status,
+            class_id: q.class_id,
+            class_name: q.class?.name || "Unknown",
+            teacher_name: q.teacher?.name || null,
+            question_count: q.questions?.length || 0,
+          })))
+        }
+      } else {
+        throw new Error("Failed to fetch quizzes")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to load quizzes")
     }
 
     const { data: classData } = await supabase
