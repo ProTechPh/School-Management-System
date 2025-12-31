@@ -66,34 +66,31 @@ export default function AdminGradesPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    // Fetch grades
-    const { data: gradeData } = await supabase
-      .from("grades")
-      .select(`
-        id, student_id, class_id, score, max_score, percentage, grade, type, date,
-        student:users!grades_student_id_fkey (name),
-        class:classes (name, subject)
-      `)
-      .order("date", { ascending: false })
-
-    if (gradeData) {
-      setGrades(gradeData.map(g => ({
-        id: g.id,
-        student_id: g.student_id,
-        student_name: (g.student as any)?.name || "Unknown",
-        class_id: g.class_id,
-        class_name: (g.class as any)?.name || "Unknown",
-        subject: (g.class as any)?.subject || "Unknown",
-        score: g.score,
-        max_score: g.max_score,
-        percentage: g.percentage,
-        grade: g.grade,
-        type: g.type,
-        date: g.date,
-      })))
+    // Fetch grades securely
+    try {
+      const response = await fetch("/api/admin/grades")
+      if (response.ok) {
+        const { grades: gradeData } = await response.json()
+        setGrades(gradeData.map((g: any) => ({
+          id: g.id,
+          student_id: g.student_id,
+          student_name: g.student?.name || "Unknown",
+          class_id: g.class_id,
+          class_name: g.class?.name || "Unknown",
+          subject: g.class?.subject || "Unknown",
+          score: g.score,
+          max_score: g.max_score,
+          percentage: g.percentage,
+          grade: g.grade,
+          type: g.type,
+          date: g.date,
+        })))
+      }
+    } catch (error) {
+      console.error("Failed to fetch grades", error)
     }
 
-    // Fetch students
+    // Fetch students (can still use client-side if public, but better to secure later)
     const { data: studentData } = await supabase
       .from("users")
       .select(`id, name, student_profiles (grade, section)`)

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Clock, FileQuestion, CheckCircle, XCircle, AlertCircle, Loader2, HelpCircle, AlertTriangle, Timer } from "lucide-react"
+import { Clock, FileQuestion, CheckCircle, AlertCircle, Loader2, AlertTriangle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 interface QuizQuestion {
@@ -82,7 +82,6 @@ export default function StudentQuizzesPage() {
   useEffect(() => {
     fetchData()
     
-    // Anti-cheating listeners
     const handleVisibilityChange = () => {
       if (document.hidden && takingQuiz && !showResults) {
         activityLogRef.current.tabSwitches++
@@ -135,38 +134,19 @@ export default function StudentQuizzesPage() {
     if (!user) return
     setUserId(user.id)
 
-    const { data: enrollments } = await supabase
-      .from("class_students")
-      .select("class_id")
-      .eq("student_id", user.id)
-
-    if (enrollments && enrollments.length > 0) {
-      const classIds = enrollments.map(e => e.class_id)
-
-      const { data: quizData } = await supabase
-        .from("quizzes")
-        .select(`
-          id, title, description, duration, due_date, teacher_id, class_id,
-          class:classes (name),
-          questions:quiz_questions (id, question, type, options, points)
-        `)
-        .in("class_id", classIds)
-        .eq("status", "published")
-        .order("created_at", { ascending: false })
-
-      if (quizData) {
-        setQuizzes(quizData.map(q => ({
-          id: q.id,
-          title: q.title,
-          description: q.description,
-          duration: q.duration,
-          due_date: q.due_date,
-          class_id: q.class_id,
-          class_name: (q.class as any)?.name || "Unknown",
-          teacher_id: q.teacher_id,
-          questions: ((q.questions as any) || []).sort((a: any, b: any) => a.sort_order - b.sort_order),
+    // Securely fetch quizzes via API
+    try {
+      const response = await fetch("/api/student/quizzes")
+      if (response.ok) {
+        const data = await response.json()
+        setQuizzes(data.quizzes.map((q: any) => ({
+          ...q,
+          class_name: q.class?.name || "Unknown"
         })))
       }
+    } catch (error) {
+      console.error("Failed to fetch quizzes", error)
+      toast.error("Failed to load quizzes")
     }
 
     const { data: attempts } = await supabase
@@ -189,7 +169,6 @@ export default function StudentQuizzesPage() {
   const handleStartQuiz = async (quiz: Quiz) => {
     setStartingQuiz(true)
     try {
-      // Notify server that quiz is starting to establish start time
       const response = await fetch("/api/student/start-quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -240,18 +219,14 @@ export default function StudentQuizzesPage() {
     setIsSubmitting(true)
 
     try {
-      // Prepare answers payload
       const answersPayload = takingQuiz.questions.map((question, index) => {
         const answer = selectedAnswers[index]
-        let answerValue: string | number = answer
-
         return {
           questionId: question.id,
-          answer: answerValue
+          answer: answer
         }
       })
 
-      // Call secure API
       const response = await fetch("/api/student/submit-quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -268,7 +243,6 @@ export default function StudentQuizzesPage() {
         throw new Error(result.error || "Failed to submit quiz")
       }
 
-      // Update local state
       setQuizResult({
         score: result.score,
         maxScore: result.maxScore,
@@ -311,11 +285,6 @@ export default function StudentQuizzesPage() {
   }
 
   const doCloseQuiz = () => {
-    if (!showResults && takingQuiz) {
-      // If closing without submitting, consider logging an "exit attempt"
-      // In a real app, you might want to auto-submit here
-    }
-    
     setTakingQuiz(null)
     setShowResults(false)
     setQuizResult(null)

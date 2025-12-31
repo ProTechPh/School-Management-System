@@ -2,7 +2,7 @@ import { createClient } from "./client"
 
 export const AVATAR_BUCKET = "avatars"
 export const MAX_AVATAR_SIZE = 5 * 1024 * 1024 // 5MB
-export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"]
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
 export const AVATAR_DIMENSIONS = { width: 256, height: 256 }
 
 // For lesson materials, we assume a 'materials' bucket exists and is PRIVATE
@@ -32,7 +32,7 @@ export async function ensureAvatarBucketExists(): Promise<{ success: boolean; er
 
 export function validateImageFile(file: File): { valid: boolean; error?: string } {
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    return { valid: false, error: "Please upload a JPG or PNG image" }
+    return { valid: false, error: "Please upload a valid image (JPEG, PNG, GIF, WEBP)" }
   }
   if (file.size > MAX_AVATAR_SIZE) {
     return { valid: false, error: "Image must be less than 5MB" }
@@ -41,8 +41,9 @@ export function validateImageFile(file: File): { valid: boolean; error?: string 
 }
 
 export function generateAvatarPath(userId: string, fileExtension: string): string {
-  const timestamp = Date.now()
-  return `${userId}-${timestamp}.${fileExtension}`
+  // Use a random UUID or timestamp to prevent predictable filenames
+  const uniqueId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()
+  return `${userId}/${uniqueId}.${fileExtension}`
 }
 
 export async function uploadAvatar(
@@ -50,15 +51,33 @@ export async function uploadAvatar(
   file: File
 ): Promise<{ url: string | null; error?: string }> {
   const supabase = createClient()
+  
+  // 1. Strict Client-Side Validation
   const validation = validateImageFile(file)
   if (!validation.valid) return { url: null, error: validation.error }
   
-  const fileExt = file.name.split(".").pop() || "jpg"
+  // 2. Enforce File Extension based on MIME Type (Trust MIME type over extension)
+  const mimeToExt: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp"
+  }
+  
+  const fileExt = mimeToExt[file.type]
+  if (!fileExt) {
+    return { url: null, error: "Unsupported file type" }
+  }
+
   const filePath = generateAvatarPath(userId, fileExt)
   
+  // 3. Upload with Explicit Content-Type
   const { error: uploadError } = await supabase.storage
     .from(AVATAR_BUCKET)
-    .upload(filePath, file, { upsert: true, contentType: file.type })
+    .upload(filePath, file, { 
+      upsert: true, 
+      contentType: file.type // Explicitly set content type to prevent sniffing
+    })
   
   if (uploadError) return { url: null, error: "Failed to upload image." }
   

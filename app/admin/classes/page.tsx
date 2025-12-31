@@ -106,41 +106,29 @@ export default function ClassesPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    // Fetch classes with teacher info
-    const { data: classData } = await supabase
-      .from("classes")
-      .select(`
-        id, name, grade, section, subject, room, schedule, teacher_id,
-        teacher:users!classes_teacher_id_fkey (name)
-      `)
-      .order("name")
-
-    // Fetch student counts
-    const { data: enrollments } = await supabase
-      .from("class_students")
-      .select("class_id")
-
-    const countMap: Record<string, number> = {}
-    enrollments?.forEach(e => {
-      countMap[e.class_id] = (countMap[e.class_id] || 0) + 1
-    })
-
-    if (classData) {
-      setClasses(classData.map(c => ({
-        id: c.id,
-        name: c.name,
-        grade: c.grade,
-        section: c.section,
-        subject: c.subject,
-        room: c.room,
-        schedule: c.schedule,
-        teacher_id: c.teacher_id,
-        teacher_name: (c.teacher as any)?.name || null,
-        student_count: countMap[c.id] || 0,
-      })))
+    // Securely fetch classes via API
+    try {
+      const response = await fetch("/api/admin/classes")
+      if (response.ok) {
+        const { classes: classData } = await response.json()
+        setClasses(classData.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          grade: c.grade,
+          section: c.section,
+          subject: c.subject,
+          room: c.room,
+          schedule: c.schedule,
+          teacher_id: c.teacher_id,
+          teacher_name: c.teacher?.name || null,
+          student_count: c.student_count || 0,
+        })))
+      }
+    } catch (error) {
+      console.error("Failed to fetch classes", error)
     }
 
-    // Fetch teachers
+    // Fetch teachers (public enough to keep client-side for now, but can be secured later)
     const { data: teacherData } = await supabase
       .from("users")
       .select(`id, name, teacher_profiles!inner (subject)`)
@@ -150,7 +138,6 @@ export default function ClassesPage() {
     if (teacherData) {
       setTeachers(teacherData.map(t => {
         const profile = t.teacher_profiles as any
-        // Handle both array and object responses
         const subject = Array.isArray(profile) ? profile[0]?.subject : profile?.subject
         return {
           id: t.id,
@@ -233,10 +220,6 @@ export default function ClassesPage() {
 
     const supabase = createClient()
     
-    // For now, keeping Edit as client-side for simplicity, but ideally should also move to API
-    // The critical part (schedule logic) is complex to replicate here without the helpers
-    // A future improvement would be creating an update-class API route
-    
     const { error } = await supabase
       .from("classes")
       .update({
@@ -270,13 +253,9 @@ export default function ClassesPage() {
 
     const supabase = createClient()
     
-    // First delete schedules
     await supabase.from("schedules").delete().eq("class_id", selectedClass.id)
-    
-    // Delete enrollments
     await supabase.from("class_students").delete().eq("class_id", selectedClass.id)
     
-    // Then delete the class
     const { error } = await supabase.from("classes").delete().eq("id", selectedClass.id)
 
     if (error) {

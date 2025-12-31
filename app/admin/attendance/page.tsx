@@ -47,25 +47,23 @@ export default function AttendancePage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    const { data: attendanceData } = await supabase
-      .from("attendance_records")
-      .select(`
-        id, student_id, class_id, date, status,
-        student:users!attendance_records_student_id_fkey (name),
-        class:classes (name)
-      `)
-      .order("date", { ascending: false })
-
-    if (attendanceData) {
-      setRecords(attendanceData.map(r => ({
-        id: r.id,
-        student_id: r.student_id,
-        student_name: (r.student as any)?.name || "Unknown",
-        class_id: r.class_id,
-        class_name: (r.class as any)?.name || "Unknown",
-        date: r.date,
-        status: r.status,
-      })))
+    // Securely fetch attendance via API
+    try {
+      const response = await fetch("/api/admin/attendance")
+      if (response.ok) {
+        const { attendance } = await response.json()
+        setRecords(attendance.map((r: any) => ({
+          id: r.id,
+          student_id: r.student_id,
+          student_name: r.student?.name || "Unknown",
+          class_id: r.class_id,
+          class_name: r.class?.name || "Unknown",
+          date: r.date,
+          status: r.status,
+        })))
+      }
+    } catch (error) {
+      console.error("Failed to fetch attendance", error)
     }
 
     const { data: classData } = await supabase
