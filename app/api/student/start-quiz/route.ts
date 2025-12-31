@@ -1,9 +1,19 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
+import { rateLimit } from "@/lib/rate-limit"
+
+// Limit starting quizzes to 5 per minute to prevent spam
+const startQuizLimiter = rateLimit(5, 60 * 1000)
 
 export async function POST(request: Request) {
   try {
+    // SECURITY FIX: Rate Limiting
+    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    if (!startQuizLimiter.check(ip)) {
+      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 

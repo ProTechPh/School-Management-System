@@ -29,7 +29,17 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
-    return NextResponse.json({ users: data })
+    // Explicit DTO mapping
+    const safeUsers = data.map((u: any) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      created_at: u.created_at,
+      is_active: u.is_active
+    }))
+
+    return NextResponse.json({ users: safeUsers })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

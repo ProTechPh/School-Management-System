@@ -22,9 +22,6 @@ export async function GET(request: Request) {
     }
 
     // Securely fetch teachers with profile data
-    // Using two queries to simulate a join since profiles might be in a separate table
-    // or a complex join if needed. Here we keep it efficient.
-    
     const { data: teachers, error: teacherError } = await supabase
       .from("users")
       .select("id, name, email, avatar, phone, address")
@@ -40,13 +37,18 @@ export async function GET(request: Request) {
 
     if (profileError) throw profileError
 
-    // Merge data
+    // Merge data using strict DTO mapping
     const profileMap = new Map(profiles.map(p => [p.id, p]))
     
     const enrichedTeachers = teachers.map(t => {
       const profile = profileMap.get(t.id)
       return {
-        ...t,
+        id: t.id,
+        name: t.name,
+        email: t.email,
+        avatar: t.avatar,
+        phone: t.phone,
+        address: t.address,
         subject: profile?.subject || "N/A",
         department: profile?.department || null,
         join_date: profile?.join_date || null,
