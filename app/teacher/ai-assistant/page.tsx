@@ -39,8 +39,7 @@ export default function TeacherAIAssistantPage() {
     <div className="flex flex-col gap-6">
       <DashboardHeader
         title="AI Assistant"
-        description="Get help with lesson planning and teaching"
-        role="teacher"
+        subtitle="Get help with lesson planning and teaching"
         userId={currentUser?.id}
       />
       <AIChat userRole="teacher" userName={currentUser?.name || "Teacher"} />

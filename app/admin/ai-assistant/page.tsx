@@ -8,8 +8,7 @@ export default function AdminAIAssistantPage() {
     <div className="flex flex-col gap-6">
       <DashboardHeader
         title="AI Assistant"
-        description="Get help with school management tasks"
-        role="admin"
+        subtitle="Get help with school management tasks"
         userId="admin"
       />
       <AIChat userRole="admin" userName="Administrator" />

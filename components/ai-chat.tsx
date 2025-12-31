@@ -33,7 +33,7 @@ export function AIChat({ userRole, userName }: AIChatProps) {
     }),
   })
 
-  const isLoading = status === "in_progress"
+  const isLoading = status === "submitted" || status === "streaming"
 
   useEffect(() => {
     if (scrollRef.current) {
