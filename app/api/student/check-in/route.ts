@@ -18,6 +18,17 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c
 }
 
+function isIpInCidr(ip: string, cidr: string) {
+  if (cidr.includes('/')) {
+    // Simple CIDR check logic could go here, but for simplicity/robustness without external libs:
+    // We will stick to exact match or basic prefix matching for this implementation
+    // unless an external library like 'ipaddr.js' is added.
+    // For this fix, we will assume SCHOOL_IP_ADDRESS is a single IP or comma-separated list.
+    return false; 
+  }
+  return ip === cidr;
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
@@ -106,25 +117,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 5. SECURITY FIX: Robust Location Verification
+    // 5. SECURITY FIX: Robust Location/Network Verification
     if (session.require_location) {
-      // A. IP Address Check (Primary Security Layer - Spoof Proof)
-      // If SCHOOL_IP_ADDRESS is configured, we enforce it strictly.
-      const allowedIp = process.env.SCHOOL_IP_ADDRESS
+      // A. IP Address Check (Primary Security Layer)
+      const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
       
-      if (allowedIp) {
-        const clientIp = request.headers.get("x-forwarded-for")?.split(',')[0] || "unknown"
-        // Allow localhost for dev/testing, otherwise enforce strict IP match
-        if (clientIp !== "::1" && clientIp !== "127.0.0.1" && clientIp !== allowedIp) {
+      if (allowedIps) {
+        const clientIp = request.headers.get("x-forwarded-for")?.split(',')[0].trim() || "unknown"
+        const allowedList = allowedIps.split(',').map(ip => ip.trim())
+        
+        // Allow localhost for dev
+        const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
+        const isAllowed = allowedList.includes(clientIp)
+
+        if (!isLocal && !isAllowed) {
            return NextResponse.json({ 
              error: "Network verification failed. You must be connected to the School Wi-Fi." 
            }, { status: 403 })
         }
       } 
-      // If no IP is configured, we must rely on GPS, but note it is spoofable.
-      // Ideally, admins should configure the IP.
 
-      // B. GPS Check (Secondary Layer)
+      // B. GPS Check (Secondary Layer - if IP check passes or isn't configured)
       if (!latitude || !longitude) {
         return NextResponse.json({ error: "GPS Location is required for this check-in." }, { status: 400 })
       }

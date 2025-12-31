@@ -36,7 +36,7 @@ export const useQRAttendanceStore = create<QRAttendanceStore>((set, get) => ({
     const qrCode = `ATT-${session.classId.toUpperCase()}-${session.date.replace(/-/g, "")}-${session.startTime.replace(":", "")}`
     const newSession: QRAttendanceSession = {
       ...session,
-      id: `qr${Date.now()}`,
+      id: crypto.randomUUID(), // Use UUID
       qrCode,
       status: "active",
       checkedInStudents: [],

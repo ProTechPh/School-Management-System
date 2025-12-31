@@ -177,13 +177,13 @@ export async function POST(request: Request) {
       })
       .eq("id", attempt.id)
 
+    // SECURITY FIX: Do not reveal flagging status to client
     return NextResponse.json({
       success: true,
       score: totalScore,
       maxScore: maxScore,
       percentage: percentage,
-      needsGrading: hasEssayQuestions || isFlagged,
-      flagged: isFlagged
+      needsGrading: hasEssayQuestions // Only reveal normal grading status
     })
 
   } catch (error: any) {

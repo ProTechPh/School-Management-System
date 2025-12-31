@@ -30,7 +30,7 @@ export const useAnnouncementStore = create<AnnouncementStore>((set, get) => ({
   addAnnouncement: (announcement) => {
     const newAnnouncement: Announcement = {
       ...announcement,
-      id: `ann${Date.now()}`,
+      id: crypto.randomUUID(), // Use UUID
       createdAt: new Date().toISOString(),
     }
     set((state) => ({

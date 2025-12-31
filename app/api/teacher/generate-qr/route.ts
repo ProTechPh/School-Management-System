@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Optional: Check if user is a teacher/admin
+    // Check if user is a teacher/admin
     const { data: userData } = await supabase
       .from("users")
       .select("role")
@@ -27,9 +27,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Session ID required" }, { status: 400 })
     }
 
+    // SECURITY FIX: IDOR Prevention
+    // Verify that the session belongs to the requesting teacher (if they are a teacher)
+    const { data: session } = await supabase
+      .from("qr_attendance_sessions")
+      .select("teacher_id")
+      .eq("id", sessionId)
+      .single()
+
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 })
+    }
+
+    // Admins can generate for anyone, Teachers only for themselves
+    if (userData.role === "teacher" && session.teacher_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden: You do not own this session" }, { status: 403 })
+    }
+
     const timestamp = Date.now()
     
-    // SECURITY FIX: Remove hardcoded fallback. Force environment variable configuration.
     const secret = process.env.QR_SECRET
     if (!secret) {
       console.error("QR_SECRET is not configured")
