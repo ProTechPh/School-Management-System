@@ -59,7 +59,13 @@ export default function StudentQuizzesPage() {
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [selectedAnswers, setSelectedAnswers] = useState<(number | string)[]>([])
   const [showResults, setShowResults] = useState(false)
-  const [quizResult, setQuizResult] = useState<{ score: number; maxScore: number; percentage: number; needsGrading: boolean } | null>(null)
+  const [quizResult, setQuizResult] = useState<{ 
+    score: number; 
+    maxScore: number; 
+    percentage: number; 
+    needsGrading: boolean;
+    flagged?: boolean;
+  } | null>(null)
   const [completedQuizzes, setCompletedQuizzes] = useState<Map<string, QuizAttempt>>(new Map())
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -267,7 +273,8 @@ export default function StudentQuizzesPage() {
         score: result.score,
         maxScore: result.maxScore,
         percentage: result.percentage,
-        needsGrading: result.needsGrading
+        needsGrading: result.needsGrading,
+        flagged: result.flagged
       })
       
       setCompletedQuizzes(prev => {
@@ -283,7 +290,11 @@ export default function StudentQuizzesPage() {
       })
 
       setShowResults(true)
-      toast.success("Quiz submitted successfully!")
+      if (result.flagged) {
+        toast.warning("Quiz submitted with flags", { description: "Your submission has been flagged for review." })
+      } else {
+        toast.success("Quiz submitted successfully!")
+      }
 
     } catch (error: any) {
       toast.error("Submission failed", { description: error.message })
@@ -366,16 +377,24 @@ export default function StudentQuizzesPage() {
             {takingQuiz && showResults && quizResult && (
               <div className="py-8 text-center space-y-6">
                 <div className="flex justify-center">
-                  <div className="rounded-full bg-green-100 p-3 dark:bg-green-900/20">
-                    <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-500" />
+                  <div className={`rounded-full p-3 ${quizResult.flagged ? "bg-amber-100 dark:bg-amber-900/20" : "bg-green-100 dark:bg-green-900/20"}`}>
+                    {quizResult.flagged ? (
+                      <AlertTriangle className="h-12 w-12 text-amber-600 dark:text-amber-500" />
+                    ) : (
+                      <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-500" />
+                    )}
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold">Quiz Submitted!</h3>
+                  <h3 className="text-2xl font-bold">
+                    {quizResult.flagged ? "Quiz Flagged for Review" : "Quiz Submitted!"}
+                  </h3>
                   <p className="text-muted-foreground mt-2">
-                    {quizResult.needsGrading 
-                      ? "Your quiz includes questions that need manual grading. Your final score will be updated once the teacher reviews it." 
-                      : "Your quiz has been automatically graded."}
+                    {quizResult.flagged
+                      ? "Your submission has been flagged for time anomalies and requires teacher review."
+                      : quizResult.needsGrading 
+                        ? "Your quiz includes questions that need manual grading. Your final score will be updated once the teacher reviews it." 
+                        : "Your quiz has been automatically graded."}
                   </p>
                 </div>
                 

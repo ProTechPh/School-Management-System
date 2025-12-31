@@ -35,19 +35,17 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protect dashboard routes
-  if (request.nextUrl.pathname.startsWith("/admin") || 
-      request.nextUrl.pathname.startsWith("/teacher") || 
-      request.nextUrl.pathname.startsWith("/student")) {
+  // Protect dashboard routes and sensitive endpoints
+  const protectedPaths = ["/admin", "/teacher", "/student", "/test-supabase"]
+  const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
+
+  if (isProtected) {
     
     if (!user) {
       return NextResponse.redirect(new URL("/login", request.url))
     }
 
-    // Check role from metadata or DB (using service role client if needed, but for middleware keep it simple with user metadata if available, or fetch from public profile table)
-    // Note: Fetching from DB in middleware can add latency. Ideally, role is in user_metadata or a JWT claim.
-    // For now, we'll fetch from the users table using the current client (RLS must allow reading own role)
-    
+    // Check role from metadata or DB
     const { data: userData } = await supabase
       .from("users")
       .select("role")
@@ -65,6 +63,10 @@ export async function middleware(request: NextRequest) {
     if (request.nextUrl.pathname.startsWith("/student") && role !== "student") {
       return NextResponse.redirect(new URL("/", request.url))
     }
+    // /test-supabase is restricted to admins only for extra security
+    if (request.nextUrl.pathname.startsWith("/test-supabase") && role !== "admin") {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
   }
 
   return response
@@ -75,6 +77,7 @@ export const config = {
     "/admin/:path*",
     "/teacher/:path*",
     "/student/:path*",
+    "/test-supabase/:path*",
     "/login"
   ],
 }
