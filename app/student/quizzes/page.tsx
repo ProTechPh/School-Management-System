@@ -29,7 +29,6 @@ interface QuizQuestion {
   type: string
   options: string[] | null
   points: number
-  // Removed correct_answer from interface to reflect data safety
 }
 
 interface Quiz {
@@ -60,12 +59,11 @@ export default function StudentQuizzesPage() {
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [selectedAnswers, setSelectedAnswers] = useState<(number | string)[]>([])
   const [showResults, setShowResults] = useState(false)
-  const [quizResult, setQuizResult] = useState<{ score: number; maxScore: number; percentage: number } | null>(null)
+  const [quizResult, setQuizResult] = useState<{ score: number; maxScore: number; percentage: number; needsGrading: boolean } | null>(null)
   const [completedQuizzes, setCompletedQuizzes] = useState<Map<string, QuizAttempt>>(new Map())
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
-  const [currentAttemptId, setCurrentAttemptId] = useState<string | null>(null)
   
   const activityLogRef = useRef({
     tabSwitches: 0,
@@ -76,7 +74,30 @@ export default function StudentQuizzesPage() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+    
+    // Anti-cheating listeners
+    const handleVisibilityChange = () => {
+      if (document.hidden && takingQuiz && !showResults) {
+        activityLogRef.current.tabSwitches++
+      }
+    }
+
+    const handleCopy = () => {
+      if (takingQuiz && !showResults) {
+        activityLogRef.current.copyPasteCount++
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    document.addEventListener("copy", handleCopy)
+    document.addEventListener("paste", handleCopy)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      document.removeEventListener("copy", handleCopy)
+      document.removeEventListener("paste", handleCopy)
+    }
+  }, [takingQuiz, showResults])
 
   useEffect(() => {
     if (!takingQuiz || showResults || timeRemaining <= 0) return
@@ -115,7 +136,6 @@ export default function StudentQuizzesPage() {
     if (enrollments && enrollments.length > 0) {
       const classIds = enrollments.map(e => e.class_id)
 
-      // Fix 1: Do not select correct_answer from quiz_questions
       const { data: quizData } = await supabase
         .from("quizzes")
         .select(`
@@ -175,28 +195,6 @@ export default function StudentQuizzesPage() {
     setTimeRemaining(quiz.duration * 60)
     
     activityLogRef.current = { tabSwitches: 0, copyPasteCount: 0, exitAttempts: 0, rightClicks: 0 }
-    
-    const supabase = createClient()
-    const { data: attemptData } = await supabase
-      .from("quiz_attempts")
-      .insert({
-        quiz_id: quiz.id,
-        student_id: userId,
-        score: 0,
-        max_score: 0,
-        percentage: 0,
-        needs_grading: false,
-        completed_at: null,
-        tab_switches: 0,
-        copy_paste_count: 0,
-        exit_attempts: 0
-      })
-      .select()
-      .single()
-    
-    if (attemptData) {
-      setCurrentAttemptId(attemptData.id)
-    }
   }
 
   const formatTime = (seconds: number) => {
@@ -212,77 +210,68 @@ export default function StudentQuizzesPage() {
   }
 
   const handleSubmitQuiz = async () => {
-    if (!takingQuiz || isSubmitting || !currentAttemptId) return
+    if (!takingQuiz || isSubmitting) return
     setIsSubmitting(true)
 
-    // Note: Client-side grading logic removed as we don't have correct answers.
-    // In a real implementation, we would submit answers to an API endpoint for grading.
-    // For this demo, we will simulate submission and show a pending state or
-    // fetch the graded result if the API returns it immediately.
-    
-    // Since we removed correct_answer from fetch, we can't grade here.
-    // Ideally we'd call an API route like /api/student/submit-quiz
-    // But for simplicity in this dyad session, I'll mock a "pending grading" state
-    // or fetch the answers securely if we were using an API route.
-    
-    // To keep it functional without a new API route for grading right now (since it wasn't explicitly asked for as a separate file),
-    // I will simulate a "submitted for grading" state.
-    
-    const supabase = createClient()
-    
-    // Save answers
-    const answersToInsert = takingQuiz.questions.map((question, index) => {
-      const answer = selectedAnswers[index]
-      let answerText = ""
+    try {
+      // Prepare answers payload
+      const answersPayload = takingQuiz.questions.map((question, index) => {
+        const answer = selectedAnswers[index]
+        let answerValue: string | number = answer
 
-      if (question.type === "multiple-choice" || question.type === "true-false") {
-        answerText = question.options?.[answer as number] || String(answer)
-      } else {
-        answerText = String(answer)
+        // For multiple choice/true-false, we send the index
+        // For text inputs, we send the string
+        
+        return {
+          questionId: question.id,
+          answer: answerValue
+        }
+      })
+
+      // Call secure API
+      const response = await fetch("/api/student/submit-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quizId: takingQuiz.id,
+          answers: answersPayload,
+          activityLog: activityLogRef.current
+        })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to submit quiz")
       }
 
-      return {
-        attempt_id: currentAttemptId,
-        question_id: question.id,
-        answer: answerText,
-        is_correct: false, // Default, to be graded by teacher or server job
-        points_awarded: 0
-      }
-    })
-
-    await supabase.from("quiz_attempt_answers").insert(answersToInsert)
-
-    // Update attempt as completed (but needs grading)
-    await supabase
-      .from("quiz_attempts")
-      .update({
-        needs_grading: true, // Mark for teacher review since we can't auto-grade securely on client
-        completed_at: new Date().toISOString(),
-        tab_switches: activityLogRef.current.tabSwitches,
-        copy_paste_count: activityLogRef.current.copyPasteCount,
-        exit_attempts: activityLogRef.current.exitAttempts
+      // Update local state
+      setQuizResult({
+        score: result.score,
+        maxScore: result.maxScore,
+        percentage: result.percentage,
+        needsGrading: result.needsGrading
       })
-      .eq("id", currentAttemptId)
-
-    // Update local state
-    setCompletedQuizzes(prev => {
-      const newMap = new Map(prev)
-      newMap.set(takingQuiz.id, {
-        quiz_id: takingQuiz.id,
-        score: 0,
-        max_score: 0,
-        percentage: 0,
-        completed_at: new Date().toISOString()
+      
+      setCompletedQuizzes(prev => {
+        const newMap = new Map(prev)
+        newMap.set(takingQuiz.id, {
+          quiz_id: takingQuiz.id,
+          score: result.score,
+          max_score: result.maxScore,
+          percentage: result.percentage,
+          completed_at: new Date().toISOString()
+        })
+        return newMap
       })
-      return newMap
-    })
 
-    toast.success("Quiz submitted!", { description: "Your answers have been submitted for grading." })
-    
-    // Reset and close
-    setTakingQuiz(null)
-    setIsSubmitting(false)
-    setCurrentAttemptId(null)
+      setShowResults(true)
+      toast.success("Quiz submitted successfully!")
+
+    } catch (error: any) {
+      toast.error("Submission failed", { description: error.message })
+      setIsSubmitting(false)
+    }
   }
 
   const handleCloseQuiz = () => {
@@ -293,10 +282,10 @@ export default function StudentQuizzesPage() {
     doCloseQuiz()
   }
 
-  const doCloseQuiz = async () => {
-    if (currentAttemptId && takingQuiz && !showResults) {
-      const supabase = createClient()
-      await supabase.from("quiz_attempts").delete().eq("id", currentAttemptId)
+  const doCloseQuiz = () => {
+    if (!showResults && takingQuiz) {
+      // If closing without submitting, consider logging an "exit attempt"
+      // In a real app, you might want to auto-submit here
     }
     
     setTakingQuiz(null)
@@ -305,7 +294,6 @@ export default function StudentQuizzesPage() {
     setTimeRemaining(0)
     setIsSubmitting(false)
     setShowExitConfirm(false)
-    setCurrentAttemptId(null)
   }
 
   if (loading) {
@@ -356,6 +344,39 @@ export default function StudentQuizzesPage() {
                   </div>
                 </div>
               </>
+            )}
+
+            {takingQuiz && showResults && quizResult && (
+              <div className="py-8 text-center space-y-6">
+                <div className="flex justify-center">
+                  <div className="rounded-full bg-green-100 p-3 dark:bg-green-900/20">
+                    <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-500" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold">Quiz Submitted!</h3>
+                  <p className="text-muted-foreground mt-2">
+                    {quizResult.needsGrading 
+                      ? "Your quiz includes questions that need manual grading. Your final score will be updated once the teacher reviews it." 
+                      : "Your quiz has been automatically graded."}
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+                  <div className="rounded-lg border p-4">
+                    <p className="text-sm text-muted-foreground">Score</p>
+                    <p className="text-2xl font-bold">{quizResult.score} / {quizResult.maxScore}</p>
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <p className="text-sm text-muted-foreground">Percentage</p>
+                    <p className="text-2xl font-bold">{quizResult.percentage}%</p>
+                  </div>
+                </div>
+
+                <Button onClick={doCloseQuiz} className="w-full max-w-sm">
+                  Return to Dashboard
+                </Button>
+              </div>
             )}
 
             {takingQuiz && !showResults && takingQuiz.questions.length > 0 && (
