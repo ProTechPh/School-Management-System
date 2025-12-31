@@ -4,7 +4,7 @@ import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: Request) {
   try {
-    // SECURITY FIX: Rate Limiting
+    // SECURITY FIX: Rate Limiting (In-Memory)
     const ip = request.headers.get("x-forwarded-for") || "unknown"
     const isAllowed = await checkRateLimit(ip, "submit-quiz", 3, 60 * 1000)
     
@@ -62,9 +62,10 @@ export async function POST(request: Request) {
     // 3. Server-Side Time Verification
     const startTime = new Date(attempt.created_at).getTime()
     const now = Date.now()
-    const durationMinutes = (now - startTime) / 1000 / 60
     const durationMs = now - startTime
+    const durationMinutes = durationMs / 1000 / 60
     
+    // Allow 2 minutes grace period for network latency
     const allowedDuration = quiz.duration + 2 
 
     if (durationMinutes > allowedDuration) {
@@ -76,6 +77,7 @@ export async function POST(request: Request) {
     // 4. Validate Due Date
     if (quiz.due_date) {
       const dueDate = new Date(quiz.due_date)
+      // Allow 5 minutes grace period
       if (now > dueDate.getTime() + 5 * 60 * 1000) { 
          const { data: reopen } = await supabase
           .from("quiz_reopens")
@@ -91,9 +93,20 @@ export async function POST(request: Request) {
     }
 
     // SECURITY FIX: Server-Side Heuristics
-    const minTimePerQuestionMs = 2000 // 2 seconds
-    const minTotalTimeMs = quiz.questions.length * minTimePerQuestionMs
+    // If a student finishes impossibly fast (e.g. < 2 seconds per question), flag it.
+    const minTimePerQuestionMs = 2000 
+    const minTotalTimeMs = (quiz.questions.length * minTimePerQuestionMs)
     const isTooFast = durationMs < minTotalTimeMs
+
+    // Sanitize Client Logs (Treat as advisory)
+    const clientTabSwitches = typeof activityLog?.tabSwitches === 'number' ? Math.max(0, activityLog.tabSwitches) : 0
+    const clientCopyPaste = typeof activityLog?.copyPasteCount === 'number' ? Math.max(0, activityLog.copyPasteCount) : 0
+    const clientExitAttempts = typeof activityLog?.exitAttempts === 'number' ? Math.max(0, activityLog.exitAttempts) : 0
+
+    // Combine Server and Client flags
+    const isFlagged = isTooFast || 
+                      clientTabSwitches > 10 || 
+                      clientCopyPaste > 5
 
     // 5. Grade Answers
     let totalScore = 0
@@ -149,14 +162,6 @@ export async function POST(request: Request) {
     // 7. Update Attempt
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
-    const clientTabSwitches = typeof activityLog?.tabSwitches === 'number' ? activityLog.tabSwitches : 0
-    const clientCopyPaste = typeof activityLog?.copyPasteCount === 'number' ? activityLog.copyPasteCount : 0
-    const clientExitAttempts = typeof activityLog?.exitAttempts === 'number' ? activityLog.exitAttempts : 0
-
-    const isFlagged = isTooFast || 
-                      clientTabSwitches > 10 || 
-                      clientCopyPaste > 5
-
     await supabase
       .from("quiz_attempts")
       .update({

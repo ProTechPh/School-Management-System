@@ -1,36 +1,48 @@
-import { createClient } from "@/lib/supabase/server"
+import { NextResponse } from "next/server"
+
+interface RateLimitContext {
+  count: number
+  resetAt: number
+}
+
+// In-memory store for rate limiting
+// Note: In a serverless environment (like Vercel), this cache is per-lambda instance.
+// While it doesn't provide a strict global limit, it effectively prevents
+// single-source flooding attacks from exhausting database connections.
+const ipCache = new Map<string, RateLimitContext>()
+
+// Clean up expired entries every 5 minutes to prevent memory leaks
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, context] of ipCache.entries()) {
+    if (now > context.resetAt) {
+      ipCache.delete(key)
+    }
+  }
+}, 5 * 60 * 1000)
 
 export async function checkRateLimit(identifier: string, endpoint: string, limit: number, windowMs: number): Promise<boolean> {
-  const supabase = await createClient()
-  const windowStart = new Date(Date.now() - windowMs).toISOString()
-
-  // 1. Clean up old records (optional optimization: move to a cron job or scheduled function)
-  // We do a cleanup occasionally to prevent table bloat, or just filter in the count query
+  const now = Date.now()
+  const key = `${identifier}:${endpoint}`
   
-  // 2. Count requests in the window
-  const { count, error } = await supabase
-    .from("rate_limits")
-    .select("*", { count: "exact", head: true })
-    .eq("identifier", identifier)
-    .eq("endpoint", endpoint)
-    .gt("created_at", windowStart)
+  const context = ipCache.get(key)
 
-  if (error) {
-    console.error("Rate limit check failed:", error)
-    return true // Fail open to avoid blocking legitimate users on DB error
+  // If no record or expired, reset
+  if (!context || now > context.resetAt) {
+    ipCache.set(key, {
+      count: 1,
+      resetAt: now + windowMs
+    })
+    return true
   }
 
-  if ((count || 0) >= limit) {
+  // Increment count
+  context.count += 1
+  
+  // Check limit
+  if (context.count > limit) {
     return false
   }
-
-  // 3. Log this request
-  // We use the service role key or ensure RLS allows insertion if using a client context
-  // Here we assume the server client has permissions
-  await supabase.from("rate_limits").insert({
-    identifier,
-    endpoint
-  })
 
   return true
 }
