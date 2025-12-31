@@ -128,7 +128,7 @@ export default function ClassesPage() {
       console.error("Failed to fetch classes", error)
     }
 
-    // Fetch teachers (public enough to keep client-side for now, but can be secured later)
+    // Fetch teachers
     const { data: teacherData } = await supabase
       .from("users")
       .select(`id, name, teacher_profiles!inner (subject)`)
@@ -218,57 +218,61 @@ export default function ClassesPage() {
     if (!selectedClass || !formData.name || !formData.subject) return
     setSaving(true)
 
-    const supabase = createClient()
-    
-    const { error } = await supabase
-      .from("classes")
-      .update({
-        name: formData.name,
-        grade: formData.grade,
-        section: formData.section,
-        subject: formData.subject,
-        teacher_id: formData.teacher_id || null,
-        room: formData.room || null,
-        schedule: getScheduleString(),
+    try {
+      const response = await fetch(`/api/admin/classes/${selectedClass.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          grade: formData.grade,
+          section: formData.section,
+          subject: formData.subject,
+          teacher_id: formData.teacher_id || null,
+          room: formData.room || null,
+          schedule: getScheduleString(),
+        })
       })
-      .eq("id", selectedClass.id)
 
-    if (error) {
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || "Failed to update class")
+      }
+
+      resetForm()
+      setEditDialogOpen(false)
+      setSelectedClass(null)
+      toast.success("Class updated successfully")
+      fetchData()
+    } catch (error: any) {
       toast.error("Failed to update class", { description: error.message })
+    } finally {
       setSaving(false)
-      return
     }
-
-    resetForm()
-    setEditDialogOpen(false)
-    setSelectedClass(null)
-    setSaving(false)
-    toast.success("Class updated successfully")
-    fetchData()
   }
 
   const handleDeleteClass = async () => {
     if (!selectedClass) return
     setSaving(true)
 
-    const supabase = createClient()
-    
-    await supabase.from("schedules").delete().eq("class_id", selectedClass.id)
-    await supabase.from("class_students").delete().eq("class_id", selectedClass.id)
-    
-    const { error } = await supabase.from("classes").delete().eq("id", selectedClass.id)
+    try {
+      const response = await fetch(`/api/admin/classes/${selectedClass.id}`, {
+        method: "DELETE",
+      })
 
-    if (error) {
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || "Failed to delete class")
+      }
+
+      setDeleteDialogOpen(false)
+      setSelectedClass(null)
+      toast.success("Class deleted successfully")
+      fetchData()
+    } catch (error: any) {
       toast.error("Failed to delete class", { description: error.message })
+    } finally {
       setSaving(false)
-      return
     }
-
-    setDeleteDialogOpen(false)
-    setSelectedClass(null)
-    setSaving(false)
-    toast.success("Class deleted successfully")
-    fetchData()
   }
 
   const openEditDialog = (cls: ClassInfo) => {

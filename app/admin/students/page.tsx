@@ -109,112 +109,26 @@ export default function StudentsPage() {
     if (!formData.first_name || !formData.last_name) return
     setSaving(true)
 
-    const supabase = createClient()
-    
-    // Construct full name from parts
-    const fullName = [
-      formData.first_name,
-      formData.middle_name,
-      formData.last_name,
-      formData.name_extension
-    ].filter(Boolean).join(" ")
-    
-    // Create user record
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .insert({
-        email: formData.email || `${formData.first_name.toLowerCase()}.${formData.last_name.toLowerCase()}@student.edu`,
-        name: fullName,
-        role: "student",
-        address: formData.current_house_street 
-          ? `${formData.current_house_street}, ${formData.current_barangay || ''}, ${formData.current_city || ''}, ${formData.current_province || ''}`
-          : null,
+    try {
+      const response = await fetch("/api/admin/students/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
       })
-      .select()
-      .single()
 
-    if (userError) {
-      toast.error("Failed to add student", { description: userError.message })
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || "Failed to create student")
+      }
+
+      setAddDialogOpen(false)
+      toast.success("Student added successfully")
+      fetchStudents()
+    } catch (error: any) {
+      toast.error("Failed to add student", { description: error.message })
+    } finally {
       setSaving(false)
-      return
     }
-
-    // Create student profile with all DepEd fields
-    const { error: profileError } = await supabase.from("student_profiles").insert({
-      id: userData.id,
-      // Basic Info
-      lrn: formData.lrn || null,
-      first_name: formData.first_name,
-      middle_name: formData.middle_name || null,
-      last_name: formData.last_name,
-      name_extension: formData.name_extension || null,
-      birthdate: formData.birthdate || null,
-      sex: formData.sex || null,
-      birthplace_city: formData.birthplace_city || null,
-      birthplace_province: formData.birthplace_province || null,
-      // Contact/Address
-      current_house_street: formData.current_house_street || null,
-      current_barangay: formData.current_barangay || null,
-      current_city: formData.current_city || null,
-      current_province: formData.current_province || null,
-      current_region: formData.current_region || null,
-      permanent_same_as_current: formData.permanent_same_as_current ?? true,
-      permanent_house_street: formData.permanent_house_street || null,
-      permanent_barangay: formData.permanent_barangay || null,
-      permanent_city: formData.permanent_city || null,
-      permanent_province: formData.permanent_province || null,
-      permanent_region: formData.permanent_region || null,
-      contact_number: formData.contact_number || null,
-      email: formData.email || null,
-      // Parent/Guardian
-      father_name: formData.father_name || null,
-      father_contact: formData.father_contact || null,
-      father_occupation: formData.father_occupation || null,
-      mother_name: formData.mother_name || null,
-      mother_contact: formData.mother_contact || null,
-      mother_occupation: formData.mother_occupation || null,
-      guardian_name: formData.guardian_name || null,
-      guardian_relationship: formData.guardian_relationship || null,
-      guardian_contact: formData.guardian_contact || null,
-      // Academic
-      grade: formData.grade,
-      section: formData.section,
-      school_year: formData.school_year || null,
-      enrollment_status: formData.enrollment_status || null,
-      last_school_attended: formData.last_school_attended || null,
-      last_school_year: formData.last_school_year || null,
-      track: formData.track || null,
-      strand: formData.strand || null,
-      enrollment_date: new Date().toISOString().split("T")[0],
-      // DepEd Required
-      psa_birth_cert_no: formData.psa_birth_cert_no || null,
-      is_4ps_beneficiary: formData.is_4ps_beneficiary ?? false,
-      household_4ps_id: formData.household_4ps_id || null,
-      is_indigenous: formData.is_indigenous ?? false,
-      indigenous_group: formData.indigenous_group || null,
-      mother_tongue: formData.mother_tongue || null,
-      religion: formData.religion || null,
-      // Health/Special Needs
-      disability_type: formData.disability_type || null,
-      disability_details: formData.disability_details || null,
-      emergency_contact_name: formData.emergency_contact_name || null,
-      emergency_contact_number: formData.emergency_contact_number || null,
-      blood_type: formData.blood_type || null,
-      medical_conditions: formData.medical_conditions || null,
-    })
-
-    if (profileError) {
-      toast.error("Failed to create student profile", { description: profileError.message })
-      // Rollback user creation if profile fails
-      await supabase.from("users").delete().eq("id", userData.id)
-      setSaving(false)
-      return
-    }
-
-    setAddDialogOpen(false)
-    setSaving(false)
-    toast.success("Student added successfully")
-    fetchStudents()
   }
 
   const handleViewDetails = (studentId: string) => {

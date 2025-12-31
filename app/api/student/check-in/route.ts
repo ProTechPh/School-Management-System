@@ -134,7 +134,30 @@ export async function POST(request: Request) {
 
     // 5. SECURITY FIX: Robust Location Verification (GPS + IP)
     if (session.require_location) {
-      // 5a. GPS Check
+      // 5a. IP Check (Strict Enforcement if configured)
+      const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
+      
+      if (allowedIps) {
+        // SECURITY FIX: Get the FIRST IP in the chain (Client IP) instead of the last (Proxy IP)
+        const forwardedFor = request.headers.get("x-forwarded-for")
+        const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() || "unknown" : "unknown"
+        
+        const allowedList = allowedIps.split(',').map(ip => ip.trim())
+        
+        // Allow localhost for dev
+        const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
+        
+        // Check if IP matches any allowed IP or CIDR
+        const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
+
+        if (!isAllowed) {
+            return NextResponse.json({ 
+              error: "You must be connected to the school network to check in." 
+            }, { status: 403 })
+        }
+      }
+
+      // 5b. GPS Check
       if (!latitude || !longitude) {
         return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })
       }
@@ -156,30 +179,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ 
           error: `You are too far from school (${Math.round(distance)}m). Must be within ${radius}m.` 
         }, { status: 403 })
-      }
-
-      // 5b. IP Check (Optional if configured)
-      const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
-      
-      if (allowedIps) {
-        // SECURITY FIX: Get the FIRST IP in the chain (Client IP) instead of the last (Proxy IP)
-        const forwardedFor = request.headers.get("x-forwarded-for")
-        const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() || "unknown" : "unknown"
-        
-        const allowedList = allowedIps.split(',').map(ip => ip.trim())
-        
-        // Allow localhost for dev
-        const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
-        
-        // Check if IP matches any allowed IP or CIDR
-        const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
-
-        if (!isAllowed) {
-            // Note: We prioritize GPS, but if IP restriction is strict, we block here.
-            // For now, let's assume GPS is the primary check requested by the prompt, 
-            // but we keep IP check as an additional layer if env var is set.
-            console.warn(`IP Check Failed: ${clientIp} not in ${allowedIps}`)
-        }
       }
     }
 

@@ -67,39 +67,39 @@ export default function AdminSettingsPage() {
 
   const handleSave = async () => {
     setSaving(true)
-    const supabase = createClient()
     
-    // Update local state
-    setLocation({
-      name: formData.name,
-      latitude: formData.latitude,
-      longitude: formData.longitude,
-      radiusMeters: formData.radiusMeters,
-    })
+    try {
+      const response = await fetch("/api/admin/settings/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+          radiusMeters: formData.radiusMeters,
+        })
+      })
 
-    // Persist to database
-    // We assume there is only one settings row, or we use a fixed ID like 1
-    const { error } = await supabase
-      .from("school_settings")
-      .upsert({
-        id: "1", // Fixed ID for single settings row
+      if (!response.ok) {
+        throw new Error("Failed to save settings")
+      }
+
+      // Update local state
+      setLocation({
         name: formData.name,
         latitude: formData.latitude,
         longitude: formData.longitude,
-        radius_meters: formData.radiusMeters,
-        updated_at: new Date().toISOString()
+        radiusMeters: formData.radiusMeters,
       })
 
-    if (error) {
-      toast.error("Failed to save settings to database", { description: error.message })
+      setSaved(true)
+      toast.success("Settings saved successfully")
+      setTimeout(() => setSaved(false), 2000)
+    } catch (error: any) {
+      toast.error("Failed to save settings", { description: error.message })
+    } finally {
       setSaving(false)
-      return
     }
-
-    setSaved(true)
-    setSaving(false)
-    toast.success("Settings saved successfully")
-    setTimeout(() => setSaved(false), 2000)
   }
 
   const handleGetCurrentLocation = () => {
