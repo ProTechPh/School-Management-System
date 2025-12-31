@@ -37,8 +37,7 @@ import type { DbStudentProfile } from "@/lib/supabase/types"
 import { 
   validateImageFile, 
   uploadAvatar, 
-  AVATAR_DIMENSIONS,
-  ALLOWED_IMAGE_TYPES 
+  AVATAR_DIMENSIONS 
 } from "@/lib/supabase/storage"
 
 interface ProfilePageProps {
@@ -307,25 +306,31 @@ export function ProfilePage({ role }: ProfilePageProps) {
 
     const supabase = createClient()
 
-    // Update user table
-    const { error: userError } = await supabase
-      .from("users")
-      .update({
-        name: formData.name,
-        phone: formData.phone || null,
-        address: formData.address || null,
+    // Securely update user table via API
+    try {
+      const response = await fetch("/api/profile/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone || null,
+          address: formData.address || null,
+        }),
       })
-      .eq("id", user.id)
 
-    if (userError) {
-      toast.error("Failed to save profile", { description: userError.message })
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update user profile")
+      }
+    } catch (error: any) {
+      toast.error(error.message)
       setSaving(false)
       return
     }
 
-    // Update role-specific profile
+    // Update role-specific profile (these don't have sensitive auth fields like role, so direct update is acceptable if RLS is set, 
+    // but for consistency/security we could move these too. For now, fixing the critical user table issue is priority #2)
     if (role === "student") {
-      // Students can only update limited fields
       const { error } = await supabase
         .from("student_profiles")
         .update({
@@ -350,7 +355,7 @@ export function ProfilePage({ role }: ProfilePageProps) {
         .eq("id", user.id)
       
       if (error) {
-        toast.error("Failed to save profile", { description: error.message })
+        toast.error("Failed to save profile details", { description: error.message })
         setSaving(false)
         return
       }
@@ -364,7 +369,7 @@ export function ProfilePage({ role }: ProfilePageProps) {
         .eq("id", user.id)
       
       if (error) {
-        toast.error("Failed to save profile", { description: error.message })
+        toast.error("Failed to save profile details", { description: error.message })
         setSaving(false)
         return
       }
@@ -443,30 +448,19 @@ export function ProfilePage({ role }: ProfilePageProps) {
       const { url, error } = await uploadAvatar(user.id, resizedFile)
       
       if (error || !url) {
-        // Fallback: convert to base64 and store in database
-        const reader = new FileReader()
-        reader.onloadend = async () => {
-          const base64 = reader.result as string
-          const supabase = createClient()
-          await supabase
-            .from("users")
-            .update({ avatar: base64 })
-            .eq("id", user.id)
-          await fetchProfile()
-          handleCancelUpload()
-          setUploading(false)
-          toast.success("Profile photo updated")
-        }
-        reader.readAsDataURL(resizedFile)
-        return
+        throw new Error(error || "Upload failed")
       }
       
-      // Update user avatar URL in database
-      const supabase = createClient()
-      await supabase
-        .from("users")
-        .update({ avatar: url })
-        .eq("id", user.id)
+      // Update user avatar URL securely via API
+      const response = await fetch("/api/profile/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar: url }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update profile with new avatar URL")
+      }
       
       await fetchProfile()
       handleCancelUpload()

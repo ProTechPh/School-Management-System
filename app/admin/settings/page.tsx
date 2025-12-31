@@ -16,10 +16,11 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog"
-import { MapPin, Save, RotateCcw, Navigation, CheckCircle2, Building2, Plus, Pencil, Trash2 } from "lucide-react"
+import { MapPin, Save, RotateCcw, Navigation, CheckCircle2, Building2, Plus, Pencil, Trash2, Loader2 } from "lucide-react"
 import { useSchoolLocationStore } from "@/lib/school-location-store"
 import { useDepartmentStore, type Department } from "@/lib/department-store"
 import { Slider } from "@/components/ui/slider"
+import { createClient } from "@/lib/supabase/client"
 
 export default function AdminSettingsPage() {
   const { location, setLocation } = useSchoolLocationStore()
@@ -32,6 +33,8 @@ export default function AdminSettingsPage() {
     radiusMeters: location.radiusMeters,
   })
   const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   
   // Department state
   const [deptDialogOpen, setDeptDialogOpen] = useState(false)
@@ -39,22 +42,62 @@ export default function AdminSettingsPage() {
   const [deptForm, setDeptForm] = useState({ name: "", description: "" })
 
   useEffect(() => {
-    setFormData({
-      name: location.name,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      radiusMeters: location.radiusMeters,
-    })
-  }, [location])
+    fetchSettings()
+  }, [])
 
-  const handleSave = () => {
+  const fetchSettings = async () => {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from("school_settings")
+      .select("*")
+      .single()
+    
+    if (data) {
+      const dbLocation = {
+        name: data.name,
+        latitude: data.latitude || 14.5995,
+        longitude: data.longitude || 120.9842,
+        radiusMeters: data.radius_meters || 500,
+      }
+      setLocation(dbLocation)
+      setFormData(dbLocation)
+    }
+    setLoading(false)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    const supabase = createClient()
+    
+    // Update local state
     setLocation({
       name: formData.name,
       latitude: formData.latitude,
       longitude: formData.longitude,
       radiusMeters: formData.radiusMeters,
     })
+
+    // Persist to database
+    // We assume there is only one settings row, or we use a fixed ID like 1
+    const { error } = await supabase
+      .from("school_settings")
+      .upsert({
+        id: "1", // Fixed ID for single settings row
+        name: formData.name,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        radius_meters: formData.radiusMeters,
+        updated_at: new Date().toISOString()
+      })
+
+    if (error) {
+      toast.error("Failed to save settings to database", { description: error.message })
+      setSaving(false)
+      return
+    }
+
     setSaved(true)
+    setSaving(false)
     toast.success("Settings saved successfully")
     setTimeout(() => setSaved(false), 2000)
   }
@@ -72,7 +115,7 @@ export default function AdminSettingsPage() {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         }))
-        toast.success("Location updated")
+        toast.success("Location updated from GPS")
       },
       (error) => {
         toast.error("Unable to get location", { description: error.message })
@@ -123,6 +166,17 @@ export default function AdminSettingsPage() {
   const handleDeleteDept = (id: string, name: string) => {
     deleteDepartment(id)
     toast.success(`"${name}" deleted`)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <DashboardHeader title="Settings" subtitle="Configure system settings" />
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -201,8 +255,13 @@ export default function AdminSettingsPage() {
             </Button>
 
             <div className="flex flex-wrap gap-3">
-              <Button onClick={handleSave}>
-                {saved ? (
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : saved ? (
                   <>
                     <CheckCircle2 className="mr-2 h-4 w-4" />
                     Saved!
@@ -214,7 +273,7 @@ export default function AdminSettingsPage() {
                   </>
                 )}
               </Button>
-              <Button variant="outline" onClick={handleReset}>
+              <Button variant="outline" onClick={handleReset} disabled={saving}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reset to Default
               </Button>
@@ -231,16 +290,16 @@ export default function AdminSettingsPage() {
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">
                 <MapPin className="mr-1 h-3 w-3" />
-                {location.name}
+                {formData.name}
               </Badge>
               <Badge variant="outline">
-                Lat: {location.latitude.toFixed(6)}
+                Lat: {formData.latitude.toFixed(6)}
               </Badge>
               <Badge variant="outline">
-                Lng: {location.longitude.toFixed(6)}
+                Lng: {formData.longitude.toFixed(6)}
               </Badge>
               <Badge variant="outline">
-                Radius: {location.radiusMeters}m
+                Radius: {formData.radiusMeters}m
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-2">

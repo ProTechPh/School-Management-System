@@ -22,7 +22,6 @@ export default function StudentAnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState("")
-  const [studentGrade, setStudentGrade] = useState("")
 
   useEffect(() => {
     fetchData()
@@ -30,44 +29,33 @@ export default function StudentAnnouncementsPage() {
 
   const fetchData = async () => {
     const supabase = createClient()
-    
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
-    // Get student's grade
-    const { data: profile } = await supabase
-      .from("student_profiles")
-      .select("grade")
-      .eq("id", user.id)
-      .single()
+    try {
+      // Use secure API route instead of direct DB query
+      const response = await fetch("/api/student/announcements")
+      if (!response.ok) throw new Error("Failed to fetch announcements")
+      
+      const { announcements: data } = await response.json()
 
-    const grade = profile?.grade || ""
-    setStudentGrade(grade)
-
-    // Fetch announcements for students
-    const { data } = await supabase
-      .from("announcements")
-      .select(`
-        id, title, content, target_audience, priority, created_at,
-        author:users!announcements_author_id_fkey (name)
-      `)
-      .or(`target_audience.eq.all,target_audience.eq.students,target_audience.eq.grade-${grade}`)
-      .order("created_at", { ascending: false })
-
-    if (data) {
-      setAnnouncements(data.map(a => ({
-        id: a.id,
-        title: a.title,
-        content: a.content,
-        author_name: (a.author as any)?.name || "Unknown",
-        target_audience: a.target_audience,
-        priority: a.priority,
-        created_at: a.created_at,
-      })))
+      if (data) {
+        setAnnouncements(data.map((a: any) => ({
+          id: a.id,
+          title: a.title,
+          content: a.content,
+          author_name: a.author?.name || "Unknown",
+          target_audience: a.target_audience,
+          priority: a.priority,
+          created_at: a.created_at,
+        })))
+      }
+    } catch (error) {
+      console.error("Error fetching announcements:", error)
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const getPriorityIcon = (priority: string) => {
