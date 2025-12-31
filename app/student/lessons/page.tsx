@@ -27,6 +27,14 @@ interface Lesson {
   materials: Material[]
 }
 
+// SECURITY FIX: Sanitize URLs
+const getSafeUrl = (url: string) => {
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url
+  }
+  return "#"
+}
+
 export default function StudentLessonsPage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [loading, setLoading] = useState(true)
@@ -140,13 +148,21 @@ export default function StudentLessonsPage() {
                       {selectedLesson.materials.map((material) => {
                         const Icon = materialIcon[material.type] || File
                         const Action = materialAction[material.type] || materialAction.document
+                        const safeUrl = getSafeUrl(material.url)
+                        
                         return material.url ? (
                           <a
                             key={material.id}
-                            href={material.url}
+                            href={safeUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                            onClick={(e) => {
+                              if (safeUrl === "#") {
+                                e.preventDefault()
+                                alert("Invalid or unsafe link")
+                              }
+                            }}
                           >
                             <div className="flex items-center gap-3">
                               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">

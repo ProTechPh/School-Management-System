@@ -76,7 +76,6 @@ export default function TeacherLessonsPage() {
     if (!user) return
     setUserId(user.id)
 
-    // Fetch teacher's classes
     const { data: classData } = await supabase
       .from("classes")
       .select("id, name")
@@ -85,7 +84,6 @@ export default function TeacherLessonsPage() {
 
     if (classData) setClasses(classData)
 
-    // Use secure API route
     try {
       const response = await fetch("/api/teacher/lessons")
       if (response.ok) {
@@ -102,8 +100,6 @@ export default function TeacherLessonsPage() {
             updated_at: l.updated_at,
           })))
         }
-      } else {
-        throw new Error("Failed to fetch lessons")
       }
     } catch (error) {
       console.error(error)
@@ -140,53 +136,47 @@ export default function TeacherLessonsPage() {
     }))
   }
 
+  // Helper for client-side check before sending to server
+  const validateMaterials = (materials: any[]) => {
+    for (const m of materials) {
+      if (m.url && !m.url.startsWith("http://") && !m.url.startsWith("https://")) {
+        return false
+      }
+    }
+    return true
+  }
+
   const handleCreateLesson = async () => {
     if (!newLesson.title || !newLesson.classId) return
-    setSaving(true)
-
-    const supabase = createClient()
     
-    const { data: lessonData, error } = await supabase
-      .from("lessons")
-      .insert({
-        title: newLesson.title,
-        class_id: newLesson.classId,
-        teacher_id: userId,
-        description: newLesson.description || null,
-        content: newLesson.content || null,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      toast.error("Failed to create lesson", { description: error.message })
-      setSaving(false)
+    if (!validateMaterials(newLesson.materials)) {
+      toast.error("Invalid URL detected. All links must start with http:// or https://")
       return
     }
 
-    if (lessonData && newLesson.materials.length > 0) {
-      const materialsToInsert = newLesson.materials
-        .filter(m => m.name && m.url)
-        .map(m => ({
-          lesson_id: lessonData.id,
-          name: m.name,
-          type: m.type,
-          url: m.url,
-        }))
-      
-      if (materialsToInsert.length > 0) {
-        const { error: matError } = await supabase.from("lesson_materials").insert(materialsToInsert)
-        if (matError) {
-          toast.error("Lesson created but materials failed to save", { description: matError.message })
-        }
-      }
-    }
+    setSaving(true)
 
-    toast.success("Lesson created successfully")
-    setNewLesson({ title: "", classId: "", description: "", content: "", materials: [] })
-    setIsCreateOpen(false)
-    setSaving(false)
-    fetchData()
+    try {
+      const response = await fetch("/api/teacher/lessons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newLesson)
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || "Failed to create lesson")
+      }
+
+      toast.success("Lesson created successfully")
+      setNewLesson({ title: "", classId: "", description: "", content: "", materials: [] })
+      setIsCreateOpen(false)
+      fetchData()
+    } catch (error: any) {
+      toast.error(error.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const openEditDialog = (lesson: Lesson) => {
@@ -240,57 +230,35 @@ export default function TeacherLessonsPage() {
 
   const handleUpdateLesson = async () => {
     if (!editLesson || !editLesson.title || !editLesson.classId) return
-    setSaving(true)
 
-    const supabase = createClient()
-    
-    // Update lesson
-    const { error } = await supabase
-      .from("lessons")
-      .update({
-        title: editLesson.title,
-        class_id: editLesson.classId,
-        description: editLesson.description || null,
-        content: editLesson.content || null,
-      })
-      .eq("id", editLesson.id)
-
-    if (error) {
-      toast.error("Failed to update lesson", { description: error.message })
-      setSaving(false)
+    if (!validateMaterials(editLesson.materials)) {
+      toast.error("Invalid URL detected. All links must start with http:// or https://")
       return
     }
 
-    // Delete removed materials
-    if (editLesson.deletedMaterialIds.length > 0) {
-      await supabase.from("lesson_materials").delete().in("id", editLesson.deletedMaterialIds)
+    setSaving(true)
+
+    try {
+      const response = await fetch("/api/teacher/lessons", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editLesson)
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || "Failed to update lesson")
+      }
+
+      toast.success("Lesson updated successfully")
+      setEditDialogOpen(false)
+      setEditLesson(null)
+      fetchData()
+    } catch (error: any) {
+      toast.error(error.message)
+    } finally {
+      setSaving(false)
     }
-
-    // Add new materials
-    const newMaterials = editLesson.materials
-      .filter(m => m.isNew && m.name && m.url)
-      .map(m => ({
-        lesson_id: editLesson.id,
-        name: m.name,
-        type: m.type,
-        url: m.url,
-      }))
-
-    if (newMaterials.length > 0) {
-      await supabase.from("lesson_materials").insert(newMaterials)
-    }
-
-    // Update existing materials
-    const existingMaterials = editLesson.materials.filter(m => !m.isNew && !m.id.startsWith("temp-"))
-    for (const mat of existingMaterials) {
-      await supabase.from("lesson_materials").update({ name: mat.name, url: mat.url }).eq("id", mat.id)
-    }
-
-    toast.success("Lesson updated successfully")
-    setEditDialogOpen(false)
-    setEditLesson(null)
-    setSaving(false)
-    fetchData()
   }
 
   const materialIcon: Record<string, any> = {

@@ -27,7 +27,8 @@ export async function POST(request: Request) {
     })
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 401 })
+      // SECURITY FIX: Generic error message to prevent user enumeration
+      return NextResponse.json({ error: "Invalid login details" }, { status: 401 })
     }
 
     if (data.user) {
@@ -41,9 +42,10 @@ export async function POST(request: Request) {
       if (userData && userData.is_active === false) {
         // Sign out immediately
         await supabase.auth.signOut()
+        // SECURITY FIX: Generic error message here too
         return NextResponse.json(
-          { error: "Your account has been disabled. Please contact the administrator." }, 
-          { status: 403 }
+          { error: "Invalid login details" }, 
+          { status: 401 }
         )
       }
     }
