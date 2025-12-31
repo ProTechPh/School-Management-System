@@ -32,7 +32,6 @@ export default function AdminAnnouncementsPage() {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [userId, setUserId] = useState("")
-  const [userName, setUserName] = useState("")
   const [formData, setFormData] = useState({
     title: "",
     content: "",
@@ -48,15 +47,7 @@ export default function AdminAnnouncementsPage() {
     const supabase = createClient()
     
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      setUserId(user.id)
-      const { data: userData } = await supabase
-        .from("users")
-        .select("name")
-        .eq("id", user.id)
-        .single()
-      if (userData) setUserName(userData.name)
-    }
+    if (user) setUserId(user.id)
 
     const { data } = await supabase
       .from("announcements")
@@ -86,27 +77,33 @@ export default function AdminAnnouncementsPage() {
     if (!formData.title || !formData.content) return
     setSaving(true)
 
-    const supabase = createClient()
-    
-    const { error } = await supabase.from("announcements").insert({
-      title: formData.title,
-      content: formData.content,
-      author_id: userId,
-      target_audience: formData.targetAudience,
-      priority: formData.priority,
-    })
+    try {
+      const response = await fetch("/api/announcements/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: formData.title,
+          content: formData.content,
+          targetAudience: formData.targetAudience,
+          priority: formData.priority,
+        })
+      })
 
-    if (error) {
-      toast.error("Failed to publish announcement", { description: error.message })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to publish announcement")
+      }
+
+      setFormData({ title: "", content: "", targetAudience: "all", priority: "normal" })
+      setOpen(false)
+      toast.success("Announcement published successfully")
+      fetchData()
+    } catch (error: any) {
+      toast.error("Failed to publish", { description: error.message })
+    } finally {
       setSaving(false)
-      return
     }
-
-    setFormData({ title: "", content: "", targetAudience: "all", priority: "normal" })
-    setOpen(false)
-    setSaving(false)
-    toast.success("Announcement published successfully")
-    fetchData()
   }
 
   const handleDelete = async (id: string) => {

@@ -78,27 +78,33 @@ export default function TeacherAnnouncementsPage() {
     if (!formData.title || !formData.content) return
     setSaving(true)
 
-    const supabase = createClient()
-    
-    const { error } = await supabase.from("announcements").insert({
-      title: formData.title,
-      content: formData.content,
-      author_id: userId,
-      target_audience: "students",
-      priority: formData.priority,
-    })
+    try {
+      const response = await fetch("/api/announcements/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: formData.title,
+          content: formData.content,
+          targetAudience: "students", // Enforced for teachers
+          priority: formData.priority,
+        })
+      })
 
-    if (error) {
-      toast.error("Failed to publish announcement", { description: error.message })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to publish announcement")
+      }
+
+      setFormData({ title: "", content: "", priority: "normal" })
+      setOpen(false)
+      toast.success("Announcement published successfully")
+      fetchData()
+    } catch (error: any) {
+      toast.error("Failed to publish", { description: error.message })
+    } finally {
       setSaving(false)
-      return
     }
-
-    setFormData({ title: "", content: "", priority: "normal" })
-    setOpen(false)
-    setSaving(false)
-    toast.success("Announcement published successfully")
-    fetchData()
   }
 
   const getPriorityIcon = (priority: string) => {

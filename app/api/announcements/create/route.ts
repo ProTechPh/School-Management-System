@@ -1,0 +1,59 @@
+import { createClient } from "@/lib/supabase/server"
+import { NextResponse } from "next/server"
+
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Fetch user role
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+
+    const role = userData?.role
+
+    if (role !== "admin" && role !== "teacher") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const { title, content, targetAudience, priority } = body
+
+    if (!title || !content) {
+      return NextResponse.json({ error: "Title and content are required" }, { status: 400 })
+    }
+
+    // Enforce Role-Based Logic
+    // Teachers can only post to "students" (or specific student groups if implemented later)
+    // Admins can post to anyone
+    if (role === "teacher" && targetAudience !== "students") {
+       return NextResponse.json({ error: "Teachers can only post announcements for students." }, { status: 403 })
+    }
+
+    const { data, error } = await supabase
+      .from("announcements")
+      .insert({
+        title,
+        content,
+        author_id: user.id,
+        target_audience: targetAudience,
+        priority: priority || "normal",
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true, announcement: data })
+
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
