@@ -141,7 +141,6 @@ export async function POST(request: Request) {
     const finalNeedsGrading = hasEssayQuestions || needsManualReview
 
     // Security: If server detects anomaly (time violation), force a flag in the DB logs
-    // This ensures the teacher sees the "Suspicious Activity" alert even if client logs were tampered with
     const forcedTabSwitches = (activityLog?.tabSwitches || 0) + (needsManualReview ? 5 : 0)
     const forcedExitAttempts = (activityLog?.exitAttempts || 0) + (needsManualReview ? 1 : 0)
 
@@ -153,7 +152,6 @@ export async function POST(request: Request) {
         percentage: percentage,
         needs_grading: finalNeedsGrading,
         completed_at: new Date().toISOString(),
-        // Trust server heuristics over client logs if suspicious
         tab_switches: forcedTabSwitches,
         copy_paste_count: activityLog?.copyPasteCount || 0,
         exit_attempts: forcedExitAttempts

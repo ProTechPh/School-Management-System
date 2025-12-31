@@ -229,31 +229,33 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
     }
 
     setSearching(true)
-    const supabase = createClient()
     
-    let queryBuilder = supabase
-      .from("users")
-      .select("id, name, avatar, role")
-      .neq("id", currentUser?.id || "")
-      .ilike("name", `%${query}%`)
-      .limit(10)
+    try {
+      // Use secure API route instead of direct DB query
+      const params = new URLSearchParams({ query })
+      
+      // Apply role filter if specified
+      if (searchRoleFilter && searchRoleFilter.length > 0) {
+        // Just take the first one for now as query param, or handle multiple
+        // For simplicity in this implementation, we handle single role filtering or custom logic
+        if (searchRoleFilter.length === 1) {
+          params.append("role", searchRoleFilter[0])
+        }
+      }
 
-    // Apply role filter if specified
-    if (searchRoleFilter && searchRoleFilter.length > 0) {
-      queryBuilder = queryBuilder.in("role", searchRoleFilter)
+      const response = await fetch(`/api/search-users?${params.toString()}`)
+      if (response.ok) {
+        const { users } = await response.json()
+        setSearchResults(users || [])
+      } else {
+        setSearchResults([])
+      }
+    } catch (error) {
+      console.error("Search failed:", error)
+      setSearchResults([])
+    } finally {
+      setSearching(false)
     }
-
-    const { data } = await queryBuilder
-
-    if (data) {
-      setSearchResults(data.map(u => ({
-        id: u.id,
-        name: u.name,
-        avatar: u.avatar,
-        role: u.role,
-      })))
-    }
-    setSearching(false)
   }, 300)
 
   const handleSearchChange = (value: string) => {

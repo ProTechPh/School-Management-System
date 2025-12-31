@@ -265,7 +265,7 @@ export default function StudentQuizzesPage() {
 
       setShowResults(true)
       if (result.flagged) {
-        toast.warning("Quiz submitted with flags", { description: "Your submission has been flagged for review." })
+        toast.warning("Quiz submitted with flags", { description: "Your submission has been flagged for review due to anomalies." })
       } else {
         toast.success("Quiz submitted successfully!")
       }
@@ -339,6 +339,9 @@ export default function StudentQuizzesPage() {
                       {formatTime(timeRemaining)}
                     </div>
                   </div>
+                </div>
+                <div className="px-1 py-1 text-xs text-center text-muted-foreground bg-muted/30">
+                  Client-reported metrics active. Do not switch tabs.
                 </div>
               </>
             )}
