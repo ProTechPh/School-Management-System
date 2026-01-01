@@ -37,36 +37,102 @@ export async function GET(request: Request) {
 
     const requesterRole = userData?.role
 
-    let dbQuery = supabase
-      .from("users")
-      .select("id, name, avatar, role")
-      .neq("id", user.id)
-      .ilike("name", `%${query}%`)
-      .limit(10)
+    // SECURITY FIX: Restricted Search Scope (Issue 4)
+    let searchResults: any[] = []
 
-    // 3. Restrict Search Scope
-    // Students can ONLY search for teachers. They cannot search for other students or admins.
     if (requesterRole === "student") {
-      dbQuery = dbQuery.eq("role", "teacher")
+      // Students can ONLY search for teachers
+      const { data } = await supabase
+        .from("users")
+        .select("id, name, avatar, role")
+        .eq("role", "teacher")
+        .ilike("name", `%${query}%`)
+        .limit(10)
+      
+      searchResults = data || []
     } 
-    // Teachers can search students and other teachers
     else if (requesterRole === "teacher") {
-      if (roleFilter === "student") {
-        dbQuery = dbQuery.eq("role", "student")
-      } else if (roleFilter === "teacher") {
-        dbQuery = dbQuery.eq("role", "teacher")
-      } else {
-        // Default: can see students and teachers
-        dbQuery = dbQuery.in("role", ["student", "teacher"])
+      // Teachers can search:
+      // 1. Other Teachers
+      // 2. Admins
+      // 3. ONLY Students enrolled in their classes
+      
+      // First, get enrolled student IDs
+      const { data: myClasses } = await supabase
+        .from("classes")
+        .select("id")
+        .eq("teacher_id", user.id)
+      
+      const classIds = myClasses?.map(c => c.id) || []
+      
+      let enrolledStudentIds: string[] = []
+      if (classIds.length > 0) {
+        const { data: enrollments } = await supabase
+          .from("class_students")
+          .select("student_id")
+          .in("class_id", classIds)
+        
+        enrolledStudentIds = enrollments?.map(e => e.student_id) || []
       }
+
+      // Build query: (role in (teacher, admin)) OR (id in enrolledStudentIds AND role = student)
+      // Note: Supabase OR syntax is tricky with mixed AND/OR logic in one query builder string.
+      // Simpler approach: Fetch potentially matching users and filter in memory (for small result sets) 
+      // OR use two queries. Since we limit to 10, two queries is cleaner and safer.
+
+      // Query 1: Teachers/Admins
+      const { data: staff } = await supabase
+        .from("users")
+        .select("id, name, avatar, role")
+        .in("role", ["teacher", "admin"])
+        .neq("id", user.id)
+        .ilike("name", `%${query}%`)
+        .limit(10)
+
+      // Query 2: My Students
+      let students: any[] = []
+      if (enrolledStudentIds.length > 0 && (!roleFilter || roleFilter === "student")) {
+        const { data: myStudents } = await supabase
+          .from("users")
+          .select("id, name, avatar, role")
+          .in("id", enrolledStudentIds)
+          .ilike("name", `%${query}%`)
+          .limit(10)
+        
+        students = myStudents || []
+      }
+
+      // Merge and dedupe
+      const combined = [...(staff || []), ...students]
+      // Simple dedupe by ID just in case
+      const unique = Array.from(new Map(combined.map(u => [u.id, u])).values())
+      
+      // Apply role filter if present
+      searchResults = roleFilter 
+        ? unique.filter(u => u.role === roleFilter)
+        : unique
+        
+      // Slice to limit
+      searchResults = searchResults.slice(0, 10)
+    } 
+    else {
+      // Admins can search everyone
+      let dbQuery = supabase
+        .from("users")
+        .select("id, name, avatar, role")
+        .neq("id", user.id)
+        .ilike("name", `%${query}%`)
+        .limit(10)
+        
+      if (roleFilter) {
+        dbQuery = dbQuery.eq("role", roleFilter)
+      }
+      
+      const { data } = await dbQuery
+      searchResults = data || []
     }
-    // Admins can search everyone (no restriction added)
 
-    const { data, error } = await dbQuery
-
-    if (error) throw error
-
-    return NextResponse.json({ users: data })
+    return NextResponse.json({ users: searchResults })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

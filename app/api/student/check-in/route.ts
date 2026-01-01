@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 // Helper to parse IPv4 to unsigned 32-bit integer
 function ipV4ToNumber(ip: string): number {
@@ -46,6 +47,14 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export async function POST(request: Request) {
   try {
+    // SECURITY FIX: Add Rate Limiting (Issue 2)
+    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    const isAllowed = await checkRateLimit(ip, "check-in", 10, 60 * 1000)
+    
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Too many check-in attempts. Please wait." }, { status: 429 })
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -86,6 +95,7 @@ export async function POST(request: Request) {
     }
 
     // Check if QR code is expired (Strict 5s window)
+    // This physical proximity constraint is our primary defense against remote check-ins
     const now = Date.now()
     const qrAge = now - timestamp
     
@@ -132,22 +142,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 5. SECURITY FIX: Robust Location Verification (IP Priority)
+    // 5. SECURITY FIX: Robust Location Verification (Issue 1)
     if (session.require_location) {
       let locationVerified = false;
 
       // 5a. IP Check (Primary - Secure)
-      const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
+      const allowedIps = process.env.SCHOOL_IP_ADDRESS 
       
       if (allowedIps) {
-        // SECURITY FIX: Prioritize x-real-ip (platform set) over x-forwarded-for (client modifiable)
         const realIp = request.headers.get("x-real-ip")
         let clientIp = "unknown"
 
         if (realIp) {
           clientIp = realIp
         } else {
-          // Fallback for dev environments or non-standard proxies
           const forwardedFor = request.headers.get("x-forwarded-for")
           if (forwardedFor) {
             clientIp = forwardedFor.split(',')[0].trim()
@@ -155,52 +163,46 @@ export async function POST(request: Request) {
         }
         
         const allowedList = allowedIps.split(',').map(ip => ip.trim())
-        
-        // Allow localhost for dev
         const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
-        
-        // Check if IP matches any allowed IP or CIDR
         const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
 
         if (isAllowed) {
           locationVerified = true;
         } else {
-          // Strict enforcement: If IP whitelist is configured but user doesn't match, REJECT.
-          // Do not fallback to GPS as it is easily spoofed.
+          // Strict enforcement: If IP whitelist is configured, fail immediately if no match.
+          // Do not fallback to GPS if IP restriction is active, as GPS is easily spoofed.
           return NextResponse.json({ 
             error: "Location verification failed: You must be connected to the school network (Wi-Fi)." 
           }, { status: 403 })
         }
       }
 
-      // 5b. GPS Check (Secondary / Fallback)
-      // Only check GPS if IP verification wasn't performed (i.e. env var not set)
+      // 5b. GPS Check (Secondary / Advisory)
+      // Only check GPS if IP verification wasn't performed (i.e., env var not set)
       if (!locationVerified) {
         if (!latitude || !longitude) {
           return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })
         }
 
-        // Fetch School Settings
         const { data: schoolSettings } = await supabase
           .from("school_settings")
           .select("latitude, longitude, radius_meters")
           .single()
         
-        // Default to Manila if not set (fallback)
         const schoolLat = schoolSettings?.latitude || 14.5995
         const schoolLng = schoolSettings?.longitude || 120.9842
         const radius = schoolSettings?.radius_meters || 500
 
         const distance = calculateDistance(latitude, longitude, schoolLat, schoolLng)
 
-        // Note: GPS is user-supplied and can be spoofed. 
-        // We rely primarily on the short validity window of the QR code (5s) for security.
-        // This check serves as a secondary validation and UX reminder.
         if (distance > radius) {
           return NextResponse.json({ 
             error: `You are too far from school (${Math.round(distance)}m). Must be within ${radius}m.` 
           }, { status: 403 })
         }
+        
+        // Note: We accept GPS here, but since it can be spoofed, the primary security
+        // comes from the 5-second QR code rotation verified above.
       }
     }
 

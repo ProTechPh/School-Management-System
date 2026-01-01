@@ -90,13 +90,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // SECURITY FIX: Robust Server-Side Heuristics
-    // Calculate "Impossible Speed".
+    // SECURITY FIX: Robust Server-Side Heuristics (Issue 3)
+    // Calculate "Impossible Speed"
     // Increased to 5000ms (5 seconds) per question as a more realistic minimum threshold.
     const minTimePerQuestionMs = 5000 
     const minTotalTimeMs = (quiz.questions.length * minTimePerQuestionMs)
     
-    // If the quiz was completed faster than humanly possible
+    // If the quiz was completed faster than humanly possible, flag it.
+    // This server-side check cannot be spoofed by the client.
     const isTooFast = durationMs < minTotalTimeMs
 
     // Sanitize Client Logs (Treat as ADVISORY only)
@@ -178,7 +179,7 @@ export async function POST(request: Request) {
       })
       .eq("id", attempt.id)
 
-    // SECURITY FIX: Do not reveal flagging status to client
+    // SECURITY FIX: Do not reveal flagging status to client to prevent probing
     return NextResponse.json({
       success: true,
       score: totalScore,
