@@ -21,11 +21,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Perform the fetch with verified privileges
-    const { data, error } = await supabase
+    // Pagination logic
+    const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = parseInt(searchParams.get("limit") || "50")
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+
+    // Perform the fetch with verified privileges and pagination
+    const { data, error, count } = await supabase
       .from("users")
-      .select("id, email, name, role, created_at, is_active")
+      .select("id, email, name, role, created_at, is_active", { count: 'exact' })
       .order("name")
+      .range(from, to)
 
     if (error) throw error
 
@@ -39,7 +47,12 @@ export async function GET(request: Request) {
       is_active: u.is_active
     }))
 
-    return NextResponse.json({ users: safeUsers })
+    return NextResponse.json({ 
+      users: safeUsers,
+      total: count,
+      page,
+      limit
+    })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

@@ -19,39 +19,51 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // 2. Fetch Unlinked Accounts Efficiently
-    // We want students who do NOT have a corresponding entry in student_profiles
-    // or teachers without teacher_profiles (depending on use case, this route seems general)
+    // 2. Fetch Unlinked Accounts Efficiently using RPC
+    // This avoids fetching all users and profiles to application memory
+    // and prevents the large "NOT IN" query issue.
+    const { data: unlinkedStudents, error } = await supabase.rpc('get_unlinked_students')
     
-    // Fetch students without profiles
-    // Note: Supabase/PostgREST doesn't support "NOT EXISTS" or left join filtering easily in one go via JS client
-    // without rpc or raw sql. However, we can fetch users and profiles and diff them on server-side 
-    // which is better than sending everything to client.
-    
-    // Better approach: Fetch IDs of profiles, then fetch users NOT IN that list.
-    const { data: profiles } = await supabase
-      .from("student_profiles")
-      .select("id")
-    
-    const linkedIds = profiles?.map(p => p.id) || []
-
-    let query = supabase
-      .from("users")
-      .select("id, email, name")
-      .eq("role", "student")
-    
-    if (linkedIds.length > 0) {
-      // Filter out users who already have profiles
-      // Note: .not('id', 'in', linkedIds) might fail if list is too huge, 
-      // but for typical school size it's fine.
-      query = query.not('id', 'in', `(${linkedIds.join(',')})`)
+    if (error) {
+      // Fallback for development if migration hasn't run yet
+      console.warn("RPC failed, falling back to legacy method:", error.message)
+      return legacyFetch(supabase)
     }
-    
-    const { data: unlinkedStudents } = await query
     
     return NextResponse.json({ accounts: unlinkedStudents || [] })
 
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+}
+
+// Fallback logic in case RPC is not deployed yet
+async function legacyFetch(supabase: any) {
+  // Use a smaller limit to prevent crashes in fallback mode
+  const { data: profiles } = await supabase
+    .from("student_profiles")
+    .select("id")
+  
+  const linkedIds = profiles?.map((p: any) => p.id) || []
+
+  // If list is too big, just return empty to prevent crash
+  if (linkedIds.length > 1000) {
+    return NextResponse.json({ 
+      accounts: [], 
+      warning: "Too many profiles for legacy fetch. Please run database migrations." 
+    })
+  }
+
+  let query = supabase
+    .from("users")
+    .select("id, email, name")
+    .eq("role", "student")
+    .limit(100) // Safety limit
+  
+  if (linkedIds.length > 0) {
+    query = query.not('id', 'in', `(${linkedIds.join(',')})`)
+  }
+  
+  const { data: unlinkedStudents } = await query
+  return NextResponse.json({ accounts: unlinkedStudents || [] })
 }

@@ -19,7 +19,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Plus, Search, Eye, EyeOff, UserPlus, Users, GraduationCap, Shield, Loader2, Copy, Check, Ban, CheckCircle } from "lucide-react"
+import { Plus, Search, Eye, EyeOff, UserPlus, Users, GraduationCap, Shield, Loader2, Copy, Check, Ban, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react"
 import { useNotificationStore } from "@/lib/notification-store"
 
 interface UserAccount {
@@ -42,19 +42,26 @@ export default function UsersPage() {
   const [copied, setCopied] = useState(false)
   const [createdUser, setCreatedUser] = useState<{ email: string; password: string } | null>(null)
   const { addNotification } = useNotificationStore()
+  
+  // Pagination state
+  const [page, setPage] = useState(1)
+  const [totalUsers, setTotalUsers] = useState(0)
+  const limit = 50
 
   useEffect(() => {
     fetchUsers()
-  }, [])
+  }, [page])
 
   const fetchUsers = async () => {
+    setFetchingUsers(true)
     try {
-      const response = await fetch("/api/admin/get-users")
+      const response = await fetch(`/api/admin/get-users?page=${page}&limit=${limit}`)
       if (!response.ok) throw new Error("Failed to fetch users")
       const data = await response.json()
       
       if (data.users) {
         setUsers(data.users.map((u: any) => ({ ...u, is_active: u.is_active ?? true })))
+        setTotalUsers(data.total || 0)
       }
     } catch (error) {
       toast.error("Error fetching users")
@@ -147,8 +154,8 @@ export default function UsersPage() {
       }
 
       setUsers((prev) => [
-        ...prev,
-        { ...data.user, is_active: true }
+        { ...data.user, is_active: true },
+        ...prev
       ])
 
       setCreatedUser({ email: emailToUse, password: newUser.password })
@@ -185,7 +192,9 @@ export default function UsersPage() {
     return matchesSearch && matchesRole
   })
 
+  // Simple counts based on current page (accurate counts would require separate API)
   const getRoleCount = (role: string) => users.filter((u) => u.role === role).length
+  
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case "admin": return "destructive"
@@ -257,46 +266,12 @@ export default function UsersPage() {
     },
   ]
 
+  const totalPages = Math.ceil(totalUsers / limit)
+
   return (
     <div className="min-h-screen">
       <DashboardHeader title="User Accounts" subtitle="Create and manage user login accounts" />
       <div className="p-4 lg:p-6">
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-card-foreground">{getRoleCount("admin")}</span>
-                <Shield className="h-5 w-5 text-destructive" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Teachers</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-card-foreground">{getRoleCount("teacher")}</span>
-                <GraduationCap className="h-5 w-5 text-primary" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Students</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-card-foreground">{getRoleCount("student")}</span>
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 gap-3">
             <div className="relative flex-1 max-w-sm">
@@ -478,18 +453,43 @@ export default function UsersPage() {
             </CardContent>
           </Card>
         ) : users.length > 0 ? (
-          <DataTable columns={columns} data={filteredUsers} />
+          <>
+            <DataTable columns={columns} data={filteredUsers} />
+            
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-end space-x-2 py-4">
+              <div className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </>
         ) : (
           <Card className="bg-card border-border">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <UserPlus className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium text-card-foreground mb-2">No accounts created yet</h3>
+              <h3 className="text-lg font-medium text-card-foreground mb-2">No accounts found</h3>
               <p className="text-sm text-muted-foreground text-center mb-4">
-                Create user accounts for students, teachers, and administrators.
+                Try adjusting your search or create a new account.
               </p>
               <Button onClick={() => setAddDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Create First Account
+                Create Account
               </Button>
             </CardContent>
           </Card>

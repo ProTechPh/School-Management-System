@@ -1,8 +1,24 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import dns from "dns/promises"
 
 // Helper to validate URLs and prevent Client-Side SSRF/Local Network Access
-const isValidUrl = (url: string) => {
+const isPrivateIP = (ip: string) => {
+  const parts = ip.split('.').map(Number);
+  // 10.0.0.0/8
+  if (parts[0] === 10) return true;
+  // 172.16.0.0/12
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  // 192.168.0.0/16
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  // 127.0.0.0/8
+  if (parts[0] === 127) return true;
+  // 169.254.0.0/16 (Link-local)
+  if (parts[0] === 169 && parts[1] === 254) return true;
+  return false;
+}
+
+const isValidUrl = async (url: string) => {
   try {
     const parsed = new URL(url)
     // Only allow http/https
@@ -12,16 +28,24 @@ const isValidUrl = (url: string) => {
     
     const hostname = parsed.hostname.toLowerCase()
     
-    // Block localhost
+    // Block localhost explicitly
     if (hostname === 'localhost') return false
     
-    // Check for IPv4 private ranges
-    if (hostname.startsWith('10.')) return false
-    if (hostname.startsWith('192.168.')) return false
-    if (hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false
-    if (hostname.startsWith('127.')) return false
-    if (hostname.startsWith('169.254.')) return false
-    if (hostname === '[::1]') return false
+    // Check for IP literals directly
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)) {
+       return !isPrivateIP(hostname)
+    }
+
+    // Server-Side DNS Resolution to prevent Rebinding
+    try {
+      const addresses = await dns.resolve4(hostname);
+      // If any resolved IP is private, reject the URL
+      if (addresses.some(ip => isPrivateIP(ip))) return false;
+    } catch (e) {
+      // If DNS resolution fails, reject the URL for security
+      console.error(`DNS resolution failed for ${hostname}:`, e)
+      return false;
+    }
 
     return true
   } catch {
@@ -100,8 +124,11 @@ export async function POST(request: Request) {
 
     if (materials && Array.isArray(materials)) {
       for (const m of materials) {
-        if (m.url && !isValidUrl(m.url)) {
-          return NextResponse.json({ error: "Invalid URL. Links to private/local networks are not allowed." }, { status: 400 })
+        if (m.url) {
+          const valid = await isValidUrl(m.url)
+          if (!valid) {
+            return NextResponse.json({ error: "Invalid URL. Links to private/local networks are not allowed." }, { status: 400 })
+          }
         }
       }
     }
@@ -154,8 +181,11 @@ export async function PUT(request: Request) {
 
     if (materials && Array.isArray(materials)) {
       for (const m of materials) {
-        if (m.url && !isValidUrl(m.url)) {
-          return NextResponse.json({ error: "Invalid URL. Links to private/local networks are not allowed." }, { status: 400 })
+        if (m.url) {
+          const valid = await isValidUrl(m.url)
+          if (!valid) {
+            return NextResponse.json({ error: "Invalid URL. Links to private/local networks are not allowed." }, { status: 400 })
+          }
         }
       }
     }
