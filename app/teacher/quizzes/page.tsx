@@ -1,4 +1,16 @@
-<div className="space-y-4">
+<div className="flex items-center gap-2">
+                        <LogOut className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Exit Attempts:</span>
+                        <span className={`font-medium ${attemptActivitySummary.exit_attempts && attemptActivitySummary.exit_attempts > 0 ? "text-red-500" : ""}`}>{attemptActivitySummary.exit_attempts || 0}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 italic">
+                      Note: These flags are captured by the student's browser and can be bypassed. They should be used as supporting evidence rather than definitive proof of academic dishonesty.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-4">
                   {gradingAnswers.map((answer, index) => {
                     const question = answer.question
                     const correctIndex = parseInt(question?.correct_answer || "0", 10)
