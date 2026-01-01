@@ -42,8 +42,10 @@ export async function POST(request: Request) {
     }
 
     // 2. Validate File Type via Magic Numbers
-    const buffer = await file.arrayBuffer()
-    const header = Array.from(new Uint8Array(buffer.slice(0, 4)))
+    // SECURITY FIX: Only read the first 4 bytes to prevent OOM on large spoofed files
+    const headerBlob = file.slice(0, 4)
+    const buffer = await headerBlob.arrayBuffer()
+    const header = Array.from(new Uint8Array(buffer))
       .map(byte => byte.toString(16).padStart(2, "0"))
       .join("")
 

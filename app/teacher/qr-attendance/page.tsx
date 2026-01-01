@@ -64,8 +64,8 @@ export default function TeacherQRAttendancePage() {
   useEffect(() => {
     if (selectedSessionId) {
       updateQRCode()
-      // Security Fix: Rotate QR code every 5 seconds (was 15s)
-      rotationIntervalRef.current = setInterval(updateQRCode, 5000)
+      // Security Fix: Rotate QR code every 3 seconds (was 5s)
+      rotationIntervalRef.current = setInterval(updateQRCode, 3000)
     } else {
       if (rotationIntervalRef.current) clearInterval(rotationIntervalRef.current)
     }
@@ -191,22 +191,27 @@ export default function TeacherQRAttendancePage() {
   }
 
   const handleEndSession = async (sessionId: string) => {
-    const supabase = createClient()
-    const { error } = await supabase
-      .from("qr_attendance_sessions")
-      .update({ status: "expired" })
-      .eq("id", sessionId)
+    // SECURITY FIX: Use secure API route instead of direct DB update
+    try {
+      const response = await fetch("/api/teacher/end-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId })
+      })
 
-    if (error) {
-      toast.error("Failed to end session")
-      return
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to end session")
+      }
+
+      setSessions(prev => prev.map(s => 
+        s.id === sessionId ? { ...s, status: "expired" as const } : s
+      ))
+      setSelectedSessionId(null)
+      toast.success("Session ended")
+    } catch (error: any) {
+      toast.error("Failed to end session", { description: error.message })
     }
-
-    setSessions(prev => prev.map(s => 
-      s.id === sessionId ? { ...s, status: "expired" as const } : s
-    ))
-    setSelectedSessionId(null)
-    toast.success("Session ended")
   }
 
   const activeSession = selectedSessionId ? sessions.find((s) => s.id === selectedSessionId) : null
@@ -238,7 +243,7 @@ export default function TeacherQRAttendancePage() {
               Dynamic Attendance QR
             </CardTitle>
             <CardDescription>
-              This QR code updates automatically every 5 seconds to prevent sharing.
+              This QR code updates automatically every 3 seconds to prevent sharing.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
@@ -247,7 +252,7 @@ export default function TeacherQRAttendancePage() {
                 <div className="relative">
                   {currentQRData && <QRCodeGenerator data={currentQRData} size={250} />}
                   <div className="absolute top-2 right-2">
-                    <RefreshCw className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: "5s" }} />
+                    <RefreshCw className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: "3s" }} />
                   </div>
                 </div>
                 

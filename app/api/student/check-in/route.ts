@@ -94,12 +94,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid QR code signature" }, { status: 403 })
     }
 
-    // Check if QR code is expired (Strict 5s window)
-    // This physical proximity constraint is our primary defense against remote check-ins (replay attacks)
+    // Check if QR code is expired
+    // SECURITY FIX: Reduced validity window to 3 seconds to prevent replay attacks
     const now = Date.now()
     const qrAge = now - timestamp
     
-    if (qrAge > 5000 || qrAge < -2000) { 
+    if (qrAge > 3000 || qrAge < -2000) { 
       return NextResponse.json({ error: "QR code expired. Please scan the current code." }, { status: 400 })
     }
 
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
         if (isAllowed) {
           locationVerified = true;
         } else {
-          // Strict enforcement: If IP whitelist is configured, fail immediately if no match.
+          // SECURITY FIX: Strict enforcement. If IP whitelist is configured, fail immediately if no match.
           // Do not fallback to GPS if IP restriction is active, as GPS is easily spoofed.
           return NextResponse.json({ 
             error: "Location verification failed: You must be connected to the school network (Wi-Fi)." 
@@ -179,8 +179,6 @@ export async function POST(request: Request) {
 
       // 5b. GPS Check (Secondary / Advisory)
       // Only used if SCHOOL_IP_ADDRESS is NOT set.
-      // We accept GPS here, but since it can be spoofed, the primary security
-      // comes from the 5-second QR code rotation verified above.
       if (!locationVerified) {
         if (!latitude || !longitude) {
           return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })

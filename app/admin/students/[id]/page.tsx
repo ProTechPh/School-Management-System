@@ -144,8 +144,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     fetchEnrolledClasses()
   }, [id])
 
-  // ... (Keep fetchEnrolledClasses, fetchAvailableClasses, handleEnrollClass, handleUnenrollClass)
-
   const fetchEnrolledClasses = async () => {
     const supabase = createClient()
     
@@ -249,58 +247,40 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     }
   }
 
-  // ... (Keep handleLinkAccount, fetchStudent, handleSaveEdit)
-
   const handleLinkAccount = async () => {
     if (!selectedAccountId || !student?.profile) return
     setLinking(true)
 
-    const supabase = createClient()
-    
-    // Copy the student profile data to the selected account (excluding id)
-    const { id: _profileId, ...profileDataWithoutId } = student.profile
-    
-    // Update or insert the profile for the linked account
-    const { error: profileError } = await supabase
-      .from("student_profiles")
-      .upsert({
-        id: selectedAccountId,
-        ...profileDataWithoutId
+    // SECURITY FIX: Use secure API route for account linking
+    try {
+      const response = await fetch("/api/admin/link-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: selectedAccountId,
+          profileData: student.profile,
+          role: "student"
+        })
       })
 
-    if (profileError) {
-      toast.error("Failed to link account", { description: profileError.message })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to link account")
+      }
+
+      toast.success("Account linked successfully", { 
+        description: "The student profile has been linked to the login account." 
+      })
+      
+      setLinkDialogOpen(false)
+      setSelectedAccountId("")
+      
+      router.push(`/admin/students/${selectedAccountId}`)
+    } catch (error: any) {
+      toast.error("Failed to link account", { description: error.message })
+    } finally {
       setLinking(false)
-      return
     }
-
-    // Update the user record with student info
-    const fullName = [
-      student.profile.first_name,
-      student.profile.middle_name,
-      student.profile.last_name,
-      student.profile.name_extension
-    ].filter(Boolean).join(" ")
-
-    await supabase
-      .from("users")
-      .update({
-        name: fullName,
-        address: student.profile.current_house_street 
-          ? `${student.profile.current_house_street}, ${student.profile.current_barangay || ''}, ${student.profile.current_city || ''}`
-          : null
-      })
-      .eq("id", selectedAccountId)
-
-    toast.success("Account linked successfully", { 
-      description: "The student profile has been linked to the login account." 
-    })
-    
-    setLinkDialogOpen(false)
-    setSelectedAccountId("")
-    setLinking(false)
-    
-    router.push(`/admin/students/${selectedAccountId}`)
   }
 
   const fetchStudent = async () => {
@@ -452,8 +432,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     toast.success("Student information updated successfully")
     fetchStudent()
   }
-
-  // ... (Keep Render Logic)
   
   if (loading) {
     return (
