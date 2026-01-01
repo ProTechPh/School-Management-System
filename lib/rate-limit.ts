@@ -24,7 +24,7 @@ export async function checkRateLimit(identifier: string, endpoint: string, limit
   const key = `${identifier}:${endpoint}`
   
   try {
-    // SECURITY FIX: Use atomic RPC to prevent race conditions
+    // Use atomic RPC to prevent race conditions
     const { data, error } = await supabaseAdmin.rpc('check_rate_limit', {
       identifier: key,
       max_requests: limit,
@@ -33,15 +33,15 @@ export async function checkRateLimit(identifier: string, endpoint: string, limit
 
     if (error) {
       console.error("Rate limit RPC error:", error)
-      // SECURITY FIX: Fail closed on DB error to prevent brute-force attacks during outages
-      return false 
+      // SECURITY FIX: Fail OPEN on DB error to prevent outage amplification
+      return true 
     }
 
     return !!data
 
   } catch (err) {
     console.error("Rate limit unexpected error:", err)
-    // SECURITY FIX: Fail closed on unexpected errors
-    return false 
+    // SECURITY FIX: Fail OPEN on unexpected errors
+    return true 
   }
 }

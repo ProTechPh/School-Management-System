@@ -38,7 +38,6 @@ export default function UsersPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fetchingUsers, setFetchingUsers] = useState(true)
-  const [showPassword, setShowPassword] = useState(false)
   const [copied, setCopied] = useState(false)
   const [createdUser, setCreatedUser] = useState<{ email: string; password: string } | null>(null)
   const { addNotification } = useNotificationStore()
@@ -97,20 +96,8 @@ export default function UsersPage() {
     name: "",
     email: "",
     lrn: "",
-    password: "",
     role: "",
   })
-
-  const generatePassword = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
-    const array = new Uint32Array(12)
-    crypto.getRandomValues(array)
-    let password = ""
-    for (let i = 0; i < 12; i++) {
-      password += chars[array[i] % chars.length]
-    }
-    setNewUser({ ...newUser, password })
-  }
 
   const copyCredentials = () => {
     if (createdUser) {
@@ -124,7 +111,7 @@ export default function UsersPage() {
   }
 
   const handleCreateUser = async () => {
-    if (!newUser.name || !newUser.password || !newUser.role) return
+    if (!newUser.name || !newUser.role) return
     if (newUser.role === "student" && !newUser.lrn) return
     if (newUser.role !== "student" && !newUser.email) return
 
@@ -140,7 +127,7 @@ export default function UsersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: emailToUse,
-          password: newUser.password,
+          // No password sent, API will generate it
           name: newUser.name,
           role: newUser.role,
           lrn: newUser.lrn
@@ -158,7 +145,7 @@ export default function UsersPage() {
         ...prev
       ])
 
-      setCreatedUser({ email: emailToUse, password: newUser.password })
+      setCreatedUser({ email: emailToUse, password: data.password })
 
       toast.success("User account created", { description: `Account for ${newUser.name} has been created.` })
       
@@ -179,7 +166,7 @@ export default function UsersPage() {
   }
 
   const resetForm = () => {
-    setNewUser({ name: "", email: "", lrn: "", password: "", role: "" })
+    setNewUser({ name: "", email: "", lrn: "", role: "" })
     setCreatedUser(null)
     setCopied(false)
   }
@@ -309,7 +296,7 @@ export default function UsersPage() {
                 <DialogDescription>
                   {createdUser 
                     ? "Share these credentials with the user securely." 
-                    : "Create a new login account for a user."}
+                    : "Create a new login account for a user. A secure password will be generated automatically."}
                 </DialogDescription>
               </DialogHeader>
 
@@ -396,39 +383,14 @@ export default function UsersPage() {
                       />
                     </div>
                   )}
-                  <div className="grid gap-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="••••••••"
-                          value={newUser.password}
-                          onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                      <Button type="button" variant="outline" onClick={generatePassword}>
-                        Generate
-                      </Button>
-                    </div>
-                  </div>
+                  {/* Password field removed - auto generated */}
                   <div className="flex justify-end gap-3 pt-2">
                     <DialogClose asChild>
                       <Button variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button 
                       onClick={handleCreateUser} 
-                      disabled={loading || !newUser.name || !newUser.password || !newUser.role || (newUser.role === "student" ? !newUser.lrn : !newUser.email)}
+                      disabled={loading || !newUser.name || !newUser.role || (newUser.role === "student" ? !newUser.lrn : !newUser.email)}
                     >
                       {loading ? (
                         <>

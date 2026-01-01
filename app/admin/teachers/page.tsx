@@ -204,32 +204,18 @@ export default function TeachersPage() {
     return classes.filter((c: any) => c.teacher_id === teacherId)
   }
 
-  const generateStrongPassword = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
-    const array = new Uint32Array(12)
-    crypto.getRandomValues(array)
-    let password = ""
-    for (let i = 0; i < 12; i++) {
-      password += chars[array[i] % chars.length]
-    }
-    return password
-  }
-
   const handleAddTeacher = async () => {
     if (!newTeacher.name || !newTeacher.email || !newTeacher.subject || !newTeacher.department) return
     setSaving(true)
 
-    // Generate a secure temporary password
-    const password = generateStrongPassword()
-
     try {
-      // SECURITY FIX: Use the secure API endpoint instead of direct DB insert
+      // SECURITY FIX: Password is now generated server-side
       const response = await fetch("/api/admin/create-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: newTeacher.email,
-          password: password,
+          // No password sent, API will generate it
           name: newTeacher.name,
           role: "teacher",
           subject: newTeacher.subject,
@@ -245,7 +231,7 @@ export default function TeachersPage() {
         throw new Error(data.error || "Failed to add teacher")
       }
 
-      setCreatedCredentials({ email: newTeacher.email, password })
+      setCreatedCredentials({ email: newTeacher.email, password: data.password })
       setNewTeacher({ name: "", email: "", subject: "", department: "", phone: "", address: "" })
       toast.success("Teacher account created successfully")
       fetchData()

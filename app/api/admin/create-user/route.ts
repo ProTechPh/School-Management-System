@@ -48,10 +48,23 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse body
     const body = await request.json()
-    const { 
+    let { 
       email, password, name, role, lrn, 
       subject, department, phone, address 
     } = body
+
+    // SECURITY FIX: Server-side password generation
+    let generatedPassword = null
+    if (!password) {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
+      const array = new Uint32Array(12)
+      crypto.getRandomValues(array)
+      password = ""
+      for (let i = 0; i < 12; i++) {
+        password += chars[array[i] % chars.length]
+      }
+      generatedPassword = password
+    }
 
     // Enforce Password Complexity
     const hasMinLength = password && password.length >= 8
@@ -79,7 +92,6 @@ export async function POST(request: NextRequest) {
     })
 
     if (authError) {
-      // SECURITY FIX: Return generic error for auth failures to prevent enumeration
       console.error("Auth creation error:", authError.message)
       return NextResponse.json({ error: "Unable to create user account. Please verify the details." }, { status: 400 })
     }
@@ -98,9 +110,7 @@ export async function POST(request: NextRequest) {
       })
 
       if (userError) {
-        // Rollback auth user if DB insert fails
         await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-        
         console.error("DB User insert error:", userError.message)
         return NextResponse.json({ error: "Unable to create user account. Please verify the details." }, { status: 500 })
       }
@@ -126,12 +136,12 @@ export async function POST(request: NextRequest) {
         }
       } catch (profileError) {
         console.error("Failed to create profile for user:", authData.user.id, profileError)
-        // Don't fail the request as the user account is created, but log it
       }
 
       return NextResponse.json({ 
         success: true, 
-        user: { id: authData.user.id, email, name, role, created_at: new Date().toISOString() } 
+        user: { id: authData.user.id, email, name, role, created_at: new Date().toISOString() },
+        password: generatedPassword // Return the generated password to the admin
       })
     }
 

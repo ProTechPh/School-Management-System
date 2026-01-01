@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 
 export async function POST(request: Request) {
@@ -76,12 +77,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden: You do not have access to this material" }, { status: 403 })
     }
 
-    // 3. Generate Signed URL
-    // SECURITY FIX: Reduced expiry from 3600s (1 hour) to 300s (5 minutes)
-    // The browser uses this URL immediately to start the download/view.
-    const { data, error } = await supabase.storage
+    // 3. Generate Signed URL using Admin Client
+    // This allows strict RLS on the bucket (deny all) while allowing this API to grant access
+    const supabaseAdmin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const { data, error } = await supabaseAdmin.storage
       .from("materials") 
-      .createSignedUrl(path, 300) 
+      .createSignedUrl(path, 300) // 5 minutes expiry
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
