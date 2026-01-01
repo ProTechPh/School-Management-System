@@ -37,12 +37,16 @@ export async function POST(request: Request) {
     }
 
     // 1. Network Fencing (STRICT CHECK)
+    // Ensure student is connected to School Wi-Fi (CIDR check)
     const schoolIpRange = process.env.SCHOOL_IP_RANGE
     if (schoolIpRange) {
-      // If configured, this check is mandatory
-      // Real implementation would use CIDR parsing library
+      // Simple prefix check for demo purposes. 
+      // In production, use a CIDR library like 'ip-range-check'
+      // Example env: SCHOOL_IP_RANGE="203.0.113."
       if (!ip.startsWith(schoolIpRange)) {
-         return NextResponse.json({ error: "You must be connected to the school Wi-Fi to check in." }, { status: 403 })
+         return NextResponse.json({ 
+           error: "Network check failed. You must be connected to the school Wi-Fi." 
+         }, { status: 403 })
       }
     }
 
@@ -146,8 +150,7 @@ export async function POST(request: Request) {
           settings.longitude
         )
 
-        // SECURITY FIX: Block suspiciously perfect matches (GPS spoofing indicator)
-        // Real GPS always has some variance. Exact matches (0m) or extremely small deltas (<1m) are suspicious.
+        // Block suspiciously perfect matches (GPS spoofing indicator)
         if (distance < 1) {
            return NextResponse.json({ 
              error: "Location signal rejected. Please ensure you are using a real device." 
@@ -169,7 +172,7 @@ export async function POST(request: Request) {
       .insert({
         session_id: sessionId,
         student_id: user.id,
-        location_verified: session.require_location // Mark as verified if we passed the checks
+        location_verified: session.require_location
       })
 
     if (insertError) throw insertError

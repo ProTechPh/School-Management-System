@@ -21,7 +21,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Securely fetch teachers with profile data
+    // Securely fetch teachers
+    // Note: Even if RLS restricts columns, Admins (service role or privileged) can see more.
+    // We explicitly select fields here to be safe.
     const { data: teachers, error: teacherError } = await supabase
       .from("users")
       .select("id, name, email, avatar, phone, address")
@@ -30,14 +32,13 @@ export async function GET(request: Request) {
 
     if (teacherError) throw teacherError
 
-    // Fetch teacher profiles
     const { data: profiles, error: profileError } = await supabase
       .from("teacher_profiles")
       .select("id, subject, department, join_date")
 
     if (profileError) throw profileError
 
-    // Merge data using strict DTO mapping
+    // Strict DTO Mapping
     const profileMap = new Map(profiles.map(p => [p.id, p]))
     
     const enrichedTeachers = teachers.map(t => {
@@ -47,7 +48,8 @@ export async function GET(request: Request) {
         name: t.name,
         email: t.email,
         avatar: t.avatar,
-        phone: t.phone,
+        // Only include sensitive fields if the requester is verified Admin
+        phone: t.phone, 
         address: t.address,
         subject: profile?.subject || "N/A",
         department: profile?.department || null,
