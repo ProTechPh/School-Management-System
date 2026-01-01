@@ -72,25 +72,36 @@ export async function POST(request: NextRequest) {
 
       if (userError) {
         // Rollback auth user if DB insert fails
-        await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+        
+        if (deleteError) {
+          // CRITICAL: Log orphaned user if rollback fails
+          console.error(`CRITICAL: Orphaned Auth User Created! ID: ${authData.user.id}, Email: ${email}. Reason: DB insert failed and rollback failed. Manual cleanup required.`)
+        }
+        
         return NextResponse.json({ error: userError.message }, { status: 400 })
       }
 
       // 5. Create role-specific profile
-      if (role === "student" && lrn) {
-        await supabaseAdmin.from("student_profiles").insert({
-          id: authData.user.id,
-          lrn: lrn,
-          first_name: name.split(" ")[0],
-          last_name: name.split(" ").slice(-1)[0],
-          grade: "10",
-          section: "A",
-        })
-      } else if (role === "teacher") {
-        await supabaseAdmin.from("teacher_profiles").insert({
-          id: authData.user.id,
-          subject: "General",
-        })
+      try {
+        if (role === "student" && lrn) {
+          await supabaseAdmin.from("student_profiles").insert({
+            id: authData.user.id,
+            lrn: lrn,
+            first_name: name.split(" ")[0],
+            last_name: name.split(" ").slice(-1)[0],
+            grade: "10",
+            section: "A",
+          })
+        } else if (role === "teacher") {
+          await supabaseAdmin.from("teacher_profiles").insert({
+            id: authData.user.id,
+            subject: "General",
+          })
+        }
+      } catch (profileError) {
+        // Log profile creation error but don't fail the whole request since base user exists
+        console.error("Failed to create profile for user:", authData.user.id, profileError)
       }
 
       return NextResponse.json({ 

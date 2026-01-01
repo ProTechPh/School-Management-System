@@ -1,11 +1,40 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-// Helper to validate URLs
+// Helper to validate URLs and prevent Client-Side SSRF/Local Network Access
 const isValidUrl = (url: string) => {
   try {
     const parsed = new URL(url)
-    return parsed.protocol === "http:" || parsed.protocol === "https:"
+    // Only allow http/https
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return false
+    }
+    
+    const hostname = parsed.hostname.toLowerCase()
+    
+    // Block localhost
+    if (hostname === 'localhost') return false
+    
+    // Check for IPv4 private ranges
+    // 10.0.0.0 - 10.255.255.255
+    if (hostname.startsWith('10.')) return false
+    
+    // 192.168.0.0 - 192.168.255.255
+    if (hostname.startsWith('192.168.')) return false
+    
+    // 172.16.0.0 - 172.31.255.255
+    if (hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false
+    
+    // 127.0.0.0 - 127.255.255.255 (Loopback)
+    if (hostname.startsWith('127.')) return false
+    
+    // 169.254.0.0 - 169.254.255.255 (Link-local)
+    if (hostname.startsWith('169.254.')) return false
+
+    // IPv6 Loopback
+    if (hostname === '[::1]') return false
+
+    return true
   } catch {
     return false
   }
@@ -85,7 +114,7 @@ export async function POST(request: Request) {
     if (materials && Array.isArray(materials)) {
       for (const m of materials) {
         if (m.url && !isValidUrl(m.url)) {
-          return NextResponse.json({ error: "Invalid URL format. Links must start with http:// or https://" }, { status: 400 })
+          return NextResponse.json({ error: "Invalid URL. Links to private/local networks are not allowed." }, { status: 400 })
         }
       }
     }
@@ -139,7 +168,7 @@ export async function PUT(request: Request) {
     if (materials && Array.isArray(materials)) {
       for (const m of materials) {
         if (m.url && !isValidUrl(m.url)) {
-          return NextResponse.json({ error: "Invalid URL format. Links must start with http:// or https://" }, { status: 400 })
+          return NextResponse.json({ error: "Invalid URL. Links to private/local networks are not allowed." }, { status: 400 })
         }
       }
     }

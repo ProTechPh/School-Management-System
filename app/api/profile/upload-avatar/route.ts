@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { AVATAR_BUCKET, generateAvatarPath } from "@/lib/supabase/storage"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 // Magic numbers for file type validation
 const FILE_SIGNATURES: Record<string, string> = {
@@ -12,6 +13,15 @@ const FILE_SIGNATURES: Record<string, string> = {
 
 export async function POST(request: Request) {
   try {
+    // SECURITY FIX: Rate Limiting
+    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // Limit to 5 uploads per 10 minutes
+    const isAllowed = await checkRateLimit(ip, "upload-avatar", 5, 10 * 60 * 1000)
+    
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Too many upload attempts. Please wait." }, { status: 429 })
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -51,10 +61,6 @@ export async function POST(request: Request) {
 
     // Special check for WebP (RIFF header)
     if (!isValid && header.startsWith("52494646")) {
-       // WebP is tricky, it starts with RIFF...WEBP. 
-       // For simplicity, we accept if it matches known WebP header structure or trust specific browser uploads if signature matches.
-       // However, to be strict, let's assume if it passed the simple check it's okay, or use a library.
-       // For this implementation, we will trust the strict hex check for common formats.
        if (mimeType === "image/webp") isValid = true
     }
 
