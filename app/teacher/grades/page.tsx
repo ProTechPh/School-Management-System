@@ -119,20 +119,20 @@ export default function TeacherGradesPage() {
 
     setUserId(user.id)
 
-    // Fetch teacher's classes
-    // This query is safe as RLS should restrict to teacher's classes anyway,
-    // but migrating it to API is better for consistency. For now, we focus on the sensitive grade data.
-    const { data: classes } = await supabase
-      .from("classes")
-      .select("id, name, grade, section, subject")
-      .eq("teacher_id", user.id)
-      .order("name")
-
-    if (classes && classes.length > 0) {
-      setTeacherClasses(classes)
-      setSelectedClass(classes[0].id)
-    } else {
-      setLoading(false)
+    // FIX: Use secure API instead of direct client-side query
+    try {
+      const response = await fetch("/api/teacher/my-classes")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.classes && data.classes.length > 0) {
+          setTeacherClasses(data.classes)
+          setSelectedClass(data.classes[0].id)
+        } else {
+          setLoading(false)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching classes:", error)
     }
   }
 

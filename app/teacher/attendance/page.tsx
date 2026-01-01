@@ -56,6 +56,8 @@ export default function TeacherAttendancePage() {
     setUserId(user.id)
 
     try {
+      // FIX: Use secure API instead of direct client-side logic if applicable,
+      // or ensure RLS is strict. Here we use the dedicated API we created/verified.
       const response = await fetch("/api/teacher/my-classes")
       if (response.ok) {
         const data = await response.json()
@@ -97,7 +99,6 @@ export default function TeacherAttendancePage() {
 
   const handleSave = async () => {
     setSaving(true)
-    const supabase = createClient()
     const dateStr = format(selectedDate, "yyyy-MM-dd")
 
     const records = Object.entries(attendance).map(([studentId, status]) => ({
@@ -108,19 +109,27 @@ export default function TeacherAttendancePage() {
     }))
 
     if (records.length > 0) {
-      const { error } = await supabase.from("attendance_records").upsert(records, {
-        onConflict: "student_id,class_id,date",
-      })
-      
-      if (error) {
-        toast.error("Failed to save attendance", { description: error.message })
-        setSaving(false)
-        return
+      // FIX: Use secure API route instead of direct Supabase upsert
+      try {
+        const response = await fetch("/api/teacher/attendance/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ records })
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to save")
+        }
+        
+        toast.success("Attendance saved successfully")
+      } catch (error: any) {
+        toast.error("Failed to save attendance")
       }
+    } else {
+      toast.info("No attendance records to save")
     }
 
     setSaving(false)
-    toast.success("Attendance saved successfully")
   }
 
   const getStatusIcon = (status: AttendanceStatus | undefined) => {

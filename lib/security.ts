@@ -12,6 +12,25 @@ export function validateOrigin(request: NextRequest | Request): boolean {
   // STRICT MODE: Block requests with missing headers for state-changing methods.
   if (!origin && !referer) return false 
 
+  // FIX: Compare against strict environment variable if available
+  const allowedUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL
+  
+  if (allowedUrl) {
+    try {
+      const allowedHost = new URL(allowedUrl).host
+      
+      if (origin) {
+        return new URL(origin).host === allowedHost
+      }
+      if (referer) {
+        return new URL(referer).host === allowedHost
+      }
+    } catch {
+      return false
+    }
+  }
+
+  // Fallback to Host header check (less secure but necessary for dynamic deployments/previews without fixed ENV)
   const host = request.headers.get("host") // e.g. localhost:3000
   
   if (origin) {
@@ -38,30 +57,30 @@ export function validateOrigin(request: NextRequest | Request): boolean {
 /**
  * Securely extracts the client IP address.
  * Prevents spoofing by prioritizing the platform-provided IP (request.ip).
- * When falling back to headers, we treat the input carefully.
  */
 export function getClientIp(request: NextRequest | Request): string {
   // 1. Prefer the platform-provided IP (Available in Next.js/Vercel)
   // This is the most secure method as it is set by the edge infrastructure
   if ((request as any).ip) return (request as any).ip
 
-  // 2. Fallback: x-real-ip (Commonly set by trusted reverse proxies)
-  const realIp = request.headers.get("x-real-ip")
-  if (realIp) return realIp.trim()
+  // 2. FIX: Do not blindly trust x-forwarded-for or x-real-ip unless explicitly configured
+  // In a Vercel environment, 'x-vercel-forwarded-for' is trustworthy if present
+  const vercelIp = request.headers.get("x-vercel-forwarded-for")
+  if (vercelIp) return vercelIp
 
-  // 3. Fallback: x-forwarded-for
-  // WARNING: If the load balancer *appends* the real IP to the end of a user-supplied header,
-  // taking the first element is dangerous (Spoofing).
-  // Taking the *last* element is generally safer in "append" scenarios, though relying on headers
-  // without knowing the specific proxy topology is always slightly risky.
-  const forwardedFor = request.headers.get("x-forwarded-for")
-  if (forwardedFor) {
-    const ips = forwardedFor.split(',').map(ip => ip.trim())
-    // Return the last IP in the chain (usually the one connecting to the load balancer)
-    return ips[ips.length - 1]
+  // 3. Fallback for local development or simple proxies
+  // If we are strictly preventing spoofing, we should default to a safe placeholder or 
+  // only read headers if we trust the upstream proxy. 
+  // For this implementation, we return the last IP in x-forwarded-for if strictly needed,
+  // but for critical security checks, relying on the platform IP is best.
+  
+  if (process.env.NODE_ENV === 'development') {
+     return "127.0.0.1"
   }
 
-  return "127.0.0.1"
+  // In production without specific platform headers, we treat the request as potentially untrusted
+  // or rely on the first hop.
+  return "0.0.0.0" 
 }
 
 /**

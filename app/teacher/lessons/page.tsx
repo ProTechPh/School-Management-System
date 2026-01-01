@@ -76,13 +76,16 @@ export default function TeacherLessonsPage() {
     if (!user) return
     setUserId(user.id)
 
-    const { data: classData } = await supabase
-      .from("classes")
-      .select("id, name")
-      .eq("teacher_id", user.id)
-      .order("name")
-
-    if (classData) setClasses(classData)
+    // FIX: Use secure API instead of direct client-side query
+    try {
+      const response = await fetch("/api/teacher/my-classes")
+      if (response.ok) {
+        const data = await response.json()
+        setClasses(data.classes)
+      }
+    } catch (error) {
+      console.error("Error fetching classes:", error)
+    }
 
     try {
       const response = await fetch("/api/teacher/lessons")
