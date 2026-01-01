@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { QRScanner } from "@/components/qr-scanner"
-import { QrCode, Camera, XCircle, Clock, MapPin, Navigation, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { QrCode, Camera, XCircle, Clock, MapPin, Navigation, Loader2, AlertTriangle, CheckCircle2, Info } from "lucide-react"
 import { useSchoolLocationStore } from "@/lib/school-location-store"
 import { createClient } from "@/lib/supabase/client"
 import { format } from "date-fns"
@@ -210,6 +210,10 @@ export default function StudentQRCheckinPage() {
                   <MapPin className="mr-2 h-4 w-4" />Enable Location
                 </Button>
               )}
+            </div>
+            <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+              <Info className="h-4 w-4" />
+              <span>Note: Ensure you are connected to the school network if required by your teacher.</span>
             </div>
           </CardContent>
         </Card>

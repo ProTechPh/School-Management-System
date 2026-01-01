@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 // Convert 24-hour time to 12-hour format
 const formatTime = (time: string) => {
@@ -42,46 +43,27 @@ export default function StudentSchedulePage() {
 
   const fetchData = async () => {
     const supabase = createClient()
-    
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
-    // Get student's enrolled classes
-    const { data: enrollments } = await supabase
-      .from("class_students")
-      .select("class_id")
-      .eq("student_id", user.id)
-
-    if (enrollments && enrollments.length > 0) {
-      const classIds = enrollments.map(e => e.class_id)
-      setClassCount(classIds.length)
-
-      const { data: scheduleData } = await supabase
-        .from("schedules")
-        .select(`
-          id, day, start_time, end_time, room,
-          class:classes (name, subject, teacher:users!classes_teacher_id_fkey (name))
-        `)
-        .in("class_id", classIds)
-        .order("day")
-        .order("start_time")
-
-      if (scheduleData) {
-        setSchedule(scheduleData.map(s => ({
-          id: s.id,
-          day: s.day,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          room: s.room,
-          class_name: (s.class as any)?.name || "Unknown",
-          subject: (s.class as any)?.subject || "Unknown",
-          teacher_name: (s.class as any)?.teacher?.name || null,
-        })))
-      }
+    try {
+      const response = await fetch("/api/student/schedule")
+      if (!response.ok) throw new Error("Failed to fetch schedule")
+      
+      const data = await response.json()
+      setSchedule(data.schedule)
+      
+      // Calculate unique classes
+      const uniqueClasses = new Set(data.schedule.map((s: any) => s.class_name))
+      setClassCount(uniqueClasses.size)
+      
+    } catch (error) {
+      console.error("Schedule error:", error)
+      toast.error("Failed to load schedule")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const scheduleByDay = days.reduce((acc, day) => {

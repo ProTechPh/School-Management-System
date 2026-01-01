@@ -46,60 +46,48 @@ export default function TeacherAttendancePage() {
   }, [])
 
   useEffect(() => {
-    if (selectedClass) fetchStudents()
+    if (selectedClass) fetchClassData()
   }, [selectedClass, selectedDate])
 
   const fetchClasses = async () => {
     const supabase = createClient()
-    
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
-    const { data } = await supabase
-      .from("classes")
-      .select("id, name, grade, section")
-      .eq("teacher_id", user.id)
-      .order("name")
-
-    if (data) {
-      setClasses(data)
-      if (data.length > 0) setSelectedClass(data[0].id)
+    try {
+      const response = await fetch("/api/teacher/my-classes")
+      if (response.ok) {
+        const data = await response.json()
+        setClasses(data.classes)
+        if (data.classes.length > 0) setSelectedClass(data.classes[0].id)
+      }
+    } catch (error) {
+      console.error("Error fetching classes:", error)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
-  const fetchStudents = async () => {
-    const supabase = createClient()
-    const dateStr = format(selectedDate, "yyyy-MM-dd")
+  const fetchClassData = async () => {
+    if (!selectedClass) return
     
-    const { data } = await supabase
-      .from("class_students")
-      .select(`
-        student:users!class_students_student_id_fkey (id, name, email, avatar)
-      `)
-      .eq("class_id", selectedClass)
+    try {
+      const dateStr = format(selectedDate, "yyyy-MM-dd")
+      const response = await fetch("/api/teacher/attendance/class-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classId: selectedClass, date: dateStr })
+      })
 
-    if (data) {
-      const studentList = data.map(d => d.student as any).filter(Boolean)
-      setStudents(studentList)
-      
-      // Fetch existing attendance records for selected date
-      const { data: existingRecords } = await supabase
-        .from("attendance_records")
-        .select("student_id, status")
-        .eq("class_id", selectedClass)
-        .eq("date", dateStr)
-      
-      if (existingRecords && existingRecords.length > 0) {
-        const existingAttendance: Record<string, AttendanceStatus> = {}
-        existingRecords.forEach(record => {
-          existingAttendance[record.student_id] = record.status as AttendanceStatus
-        })
-        setAttendance(existingAttendance)
-      } else {
-        setAttendance({})
+      if (response.ok) {
+        const data = await response.json()
+        setStudents(data.students)
+        setAttendance(data.attendance || {})
       }
+    } catch (error) {
+      console.error("Error fetching attendance data:", error)
+      toast.error("Failed to load attendance data")
     }
   }
 

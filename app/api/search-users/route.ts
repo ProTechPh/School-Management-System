@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 
     const requesterRole = userData?.role
 
-    // SECURITY FIX: Restricted Search Scope (Issue 4)
+    // SECURITY FIX: Restricted Search Scope
     let searchResults: any[] = []
 
     if (requesterRole === "student") {
@@ -85,13 +85,15 @@ export async function GET(request: Request) {
         .ilike("name", `%${query}%`)
         .limit(10)
 
-      // Query 2: My Students
+      // Query 2: My Students (Strictly Scoped)
       let students: any[] = []
+      
+      // Only attempt to fetch students if the teacher actually has students enrolled
       if (enrolledStudentIds.length > 0 && (!roleFilter || roleFilter === "student")) {
         const { data: myStudents } = await supabase
           .from("users")
           .select("id, name, avatar, role")
-          .in("id", enrolledStudentIds)
+          .in("id", enrolledStudentIds) // STRICT FILTER
           .ilike("name", `%${query}%`)
           .limit(10)
         

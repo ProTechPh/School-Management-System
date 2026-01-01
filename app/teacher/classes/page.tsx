@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Users, Clock, MapPin, ClipboardCheck, BookOpen, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface ClassInfo {
   id: string
@@ -31,35 +32,22 @@ export default function TeacherClassesPage() {
 
   const fetchData = async () => {
     const supabase = createClient()
-    
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
-    const { data: classData } = await supabase
-      .from("classes")
-      .select("id, name, grade, section, subject, schedule, room")
-      .eq("teacher_id", user.id)
-      .order("name")
-
-    if (classData) {
-      // Get student counts
-      const { data: enrollments } = await supabase
-        .from("class_students")
-        .select("class_id")
-
-      const countMap: Record<string, number> = {}
-      enrollments?.forEach(e => {
-        countMap[e.class_id] = (countMap[e.class_id] || 0) + 1
-      })
-
-      setClasses(classData.map(c => ({
-        ...c,
-        student_count: countMap[c.id] || 0,
-      })))
+    try {
+      const response = await fetch("/api/teacher/classes")
+      if (!response.ok) throw new Error("Failed to fetch classes")
+      
+      const data = await response.json()
+      setClasses(data.classes)
+    } catch (error) {
+      console.error("Error:", error)
+      toast.error("Failed to load classes")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   if (loading) {
