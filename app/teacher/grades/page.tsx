@@ -200,33 +200,35 @@ export default function TeacherGradesPage() {
     if (!newGradeStudent || !newGradeType || !newGradeScore) return
     setSaving(true)
 
-    const supabase = createClient()
-    const score = Number.parseInt(newGradeScore)
-    const phGrade = percentageToPhGrade(score)
+    try {
+      const response = await fetch("/api/teacher/grades/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: newGradeStudent,
+          classId: selectedClass,
+          score: Number.parseInt(newGradeScore),
+          maxScore: 100, // Assuming 100 for manual entry for now
+          type: newGradeType,
+          date: new Date().toISOString().split("T")[0],
+        })
+      })
 
-    const { error } = await supabase.from("grades").insert({
-      student_id: newGradeStudent,
-      class_id: selectedClass,
-      score: score,
-      max_score: 100,
-      percentage: score,
-      grade: phGrade,
-      type: newGradeType,
-      date: new Date().toISOString().split("T")[0],
-    })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || "Failed to add grade")
+      }
 
-    if (error) {
-      toast.error("Failed to add grade", { description: error.message })
+      setNewGradeScore("")
+      setNewGradeType("")
+      setNewGradeStudent("")
+      toast.success("Grade added successfully")
+      fetchClassGrades()
+    } catch (error: any) {
+      toast.error(error.message)
+    } finally {
       setSaving(false)
-      return
     }
-
-    setNewGradeScore("")
-    setNewGradeType("")
-    setNewGradeStudent("")
-    toast.success("Grade added successfully")
-    fetchClassGrades()
-    setSaving(false)
   }
 
   const selectedClassData = teacherClasses.find((c) => c.id === selectedClass)
