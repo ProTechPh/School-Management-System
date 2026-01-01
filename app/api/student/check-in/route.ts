@@ -134,13 +134,13 @@ export async function POST(request: Request) {
 
     // 5. SECURITY FIX: Robust Location Verification (IP Priority)
     if (session.require_location) {
-      // 5a. IP Check (Strict Enforcement)
+      let locationVerified = false;
+
+      // 5a. IP Check (Primary - Secure)
       const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
       
       if (allowedIps) {
         // SECURITY FIX: Prioritize x-real-ip (platform set) over x-forwarded-for (client modifiable)
-        // If x-real-ip is missing, we check x-forwarded-for but take the LAST IP (if trusting platform append)
-        // or just default to unknown to fail safe.
         const realIp = request.headers.get("x-real-ip")
         let clientIp = "unknown"
 
@@ -150,7 +150,6 @@ export async function POST(request: Request) {
           // Fallback for dev environments or non-standard proxies
           const forwardedFor = request.headers.get("x-forwarded-for")
           if (forwardedFor) {
-            // Take the first one, but strictly validation is better with x-real-ip in prod
             clientIp = forwardedFor.split(',')[0].trim()
           }
         }
@@ -163,35 +162,45 @@ export async function POST(request: Request) {
         // Check if IP matches any allowed IP or CIDR
         const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
 
-        if (!isAllowed) {
-            return NextResponse.json({ 
-              error: "Location verification failed: You must be connected to the school network (Wi-Fi)." 
-            }, { status: 403 })
+        if (isAllowed) {
+          locationVerified = true;
+        } else {
+          // Strict enforcement: If IP whitelist is configured but user doesn't match, REJECT.
+          // Do not fallback to GPS as it is easily spoofed.
+          return NextResponse.json({ 
+            error: "Location verification failed: You must be connected to the school network (Wi-Fi)." 
+          }, { status: 403 })
         }
       }
 
       // 5b. GPS Check (Secondary / Fallback)
-      if (!latitude || !longitude) {
-        return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })
-      }
+      // Only check GPS if IP verification wasn't performed (i.e. env var not set)
+      if (!locationVerified) {
+        if (!latitude || !longitude) {
+          return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })
+        }
 
-      // Fetch School Settings
-      const { data: schoolSettings } = await supabase
-        .from("school_settings")
-        .select("latitude, longitude, radius_meters")
-        .single()
-      
-      // Default to Manila if not set (fallback)
-      const schoolLat = schoolSettings?.latitude || 14.5995
-      const schoolLng = schoolSettings?.longitude || 120.9842
-      const radius = schoolSettings?.radius_meters || 500
+        // Fetch School Settings
+        const { data: schoolSettings } = await supabase
+          .from("school_settings")
+          .select("latitude, longitude, radius_meters")
+          .single()
+        
+        // Default to Manila if not set (fallback)
+        const schoolLat = schoolSettings?.latitude || 14.5995
+        const schoolLng = schoolSettings?.longitude || 120.9842
+        const radius = schoolSettings?.radius_meters || 500
 
-      const distance = calculateDistance(latitude, longitude, schoolLat, schoolLng)
+        const distance = calculateDistance(latitude, longitude, schoolLat, schoolLng)
 
-      if (distance > radius) {
-        return NextResponse.json({ 
-          error: `You are too far from school (${Math.round(distance)}m). Must be within ${radius}m.` 
-        }, { status: 403 })
+        // Note: GPS is user-supplied and can be spoofed. 
+        // We rely primarily on the short validity window of the QR code (5s) for security.
+        // This check serves as a secondary validation and UX reminder.
+        if (distance > radius) {
+          return NextResponse.json({ 
+            error: `You are too far from school (${Math.round(distance)}m). Must be within ${radius}m.` 
+          }, { status: 403 })
+        }
       }
     }
 

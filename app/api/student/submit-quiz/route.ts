@@ -92,8 +92,8 @@ export async function POST(request: Request) {
 
     // SECURITY FIX: Robust Server-Side Heuristics
     // Calculate "Impossible Speed".
-    // 3 seconds per question is extremely fast for reading + answering.
-    const minTimePerQuestionMs = 3000 
+    // Increased to 5000ms (5 seconds) per question as a more realistic minimum threshold.
+    const minTimePerQuestionMs = 5000 
     const minTotalTimeMs = (quiz.questions.length * minTimePerQuestionMs)
     
     // If the quiz was completed faster than humanly possible
@@ -105,6 +105,7 @@ export async function POST(request: Request) {
     const clientExitAttempts = typeof activityLog?.exitAttempts === 'number' ? Math.max(0, activityLog.exitAttempts) : 0
 
     // Combine Flags: Prioritize server-side detection
+    // isFlagged will be true if speed is impossible, regardless of client metrics
     const isFlagged = isTooFast || 
                       clientTabSwitches > 10 || 
                       clientCopyPaste > 5
