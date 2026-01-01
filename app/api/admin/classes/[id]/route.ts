@@ -40,11 +40,16 @@ export async function PUT(
       })
       .eq("id", id)
 
-    if (error) throw error
+    if (error) {
+      console.error("Class update error:", error.message)
+      // SECURITY FIX: Generic error message
+      return NextResponse.json({ error: "Failed to update class." }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Class update unexpected error:", error)
+    return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 })
   }
 }
 
@@ -81,10 +86,14 @@ export async function DELETE(
       .delete()
       .eq("id", id)
 
-    if (error) throw error
+    if (error) {
+      console.error("Class delete error:", error.message)
+      return NextResponse.json({ error: "Failed to delete class." }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Class delete unexpected error:", error)
+    return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 })
   }
 }

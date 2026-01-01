@@ -107,14 +107,24 @@ export default function AdminAnnouncementsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const supabase = createClient()
-    const { error } = await supabase.from("announcements").delete().eq("id", id)
-    if (error) {
-      toast.error("Failed to delete announcement", { description: error.message })
-      return
+    // SECURITY FIX: Use secure API route for deletion
+    try {
+      const response = await fetch("/api/announcements/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to delete announcement")
+      }
+
+      toast.success("Announcement deleted")
+      fetchData()
+    } catch (error: any) {
+      toast.error("Error deleting announcement", { description: error.message })
     }
-    toast.success("Announcement deleted")
-    fetchData()
   }
 
   const getPriorityIcon = (priority: string) => {

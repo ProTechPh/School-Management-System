@@ -22,10 +22,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Search, Eye, Pencil, Mail, Phone, Building, Calendar, User, BookOpen, Loader2, Link2, KeyRound, UserCheck, AlertCircle } from "lucide-react"
+import { Plus, Search, Eye, Pencil, Mail, Phone, Building, Calendar, User, BookOpen, Loader2, Link2, KeyRound, UserCheck, AlertCircle, Copy, Check } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useDepartmentStore } from "@/lib/department-store"
 
+// ... (Keep existing interfaces)
 interface Teacher {
   id: string
   name: string
@@ -73,6 +74,10 @@ export default function TeachersPage() {
   const [selectedAccountId, setSelectedAccountId] = useState("")
   const [teacherToLink, setTeacherToLink] = useState<Teacher | null>(null)
   
+  // New state for created credentials
+  const [createdCredentials, setCreatedCredentials] = useState<{email: string, password: string} | null>(null)
+  const [copied, setCopied] = useState(false)
+  
   const { departments: deptList } = useDepartmentStore()
 
   const [newTeacher, setNewTeacher] = useState({
@@ -95,7 +100,6 @@ export default function TeachersPage() {
     if (user) setUserId(user.id)
 
     try {
-      // Use secure API route
       const response = await fetch("/api/admin/teachers")
       if (!response.ok) throw new Error("Failed to fetch teachers")
       
@@ -107,7 +111,6 @@ export default function TeachersPage() {
       toast.error("Error loading teachers", { description: error.message })
     }
 
-    // Fetch classes (less sensitive, can keep client-side or move later)
     const { data: classData } = await supabase
       .from("classes")
       .select("id, name, grade, section, room, schedule, teacher_id")
@@ -120,10 +123,9 @@ export default function TeachersPage() {
     setLoading(false)
   }
 
+  // ... (Keep fetchUnlinkedAccounts and handleLinkAccount)
   const fetchUnlinkedAccounts = async () => {
     const supabase = createClient()
-    
-    // Get all teacher user accounts that don't have a full teacher profile
     const { data: teacherUsers } = await supabase
       .from("users")
       .select("id, email, name")
@@ -132,18 +134,15 @@ export default function TeachersPage() {
     
     if (!teacherUsers) return
 
-    // Get all teacher profiles
     const { data: profiles } = await supabase
       .from("teacher_profiles")
       .select("id, subject")
     
     const profileIds = new Set(profiles?.map(p => p.id) || [])
     
-    // Filter to accounts that have minimal/no profile data
     const unlinked = teacherUsers.filter(u => {
       if (profileIds.has(u.id)) {
         const profile = profiles?.find(p => p.id === u.id)
-        // Consider "unlinked" if profile has generic subject
         return profile?.subject === "General"
       }
       return true
@@ -158,7 +157,6 @@ export default function TeachersPage() {
 
     const supabase = createClient()
     
-    // Update or insert the profile for the linked account
     const { error: profileError } = await supabase
       .from("teacher_profiles")
       .upsert({
@@ -174,7 +172,6 @@ export default function TeachersPage() {
       return
     }
 
-    // Update the user record with teacher info
     await supabase
       .from("users")
       .update({
@@ -184,9 +181,7 @@ export default function TeachersPage() {
       })
       .eq("id", selectedAccountId)
 
-    toast.success("Account linked successfully", { 
-      description: "The teacher profile has been linked to the login account." 
-    })
+    toast.success("Account linked successfully")
     
     setLinkDialogOpen(false)
     setSelectedAccountId("")
@@ -209,50 +204,73 @@ export default function TeachersPage() {
     return classes.filter((c: any) => c.teacher_id === teacherId)
   }
 
+  const generateStrongPassword = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
+    const array = new Uint32Array(12)
+    crypto.getRandomValues(array)
+    let password = ""
+    for (let i = 0; i < 12; i++) {
+      password += chars[array[i] % chars.length]
+    }
+    return password
+  }
+
   const handleAddTeacher = async () => {
     if (!newTeacher.name || !newTeacher.email || !newTeacher.subject || !newTeacher.department) return
     setSaving(true)
 
-    const supabase = createClient()
-    
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .insert({
-        email: newTeacher.email,
-        name: newTeacher.name,
-        role: "teacher",
-        phone: newTeacher.phone || null,
-        address: newTeacher.address || null,
+    // Generate a secure temporary password
+    const password = generateStrongPassword()
+
+    try {
+      // SECURITY FIX: Use the secure API endpoint instead of direct DB insert
+      const response = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: newTeacher.email,
+          password: password,
+          name: newTeacher.name,
+          role: "teacher",
+          subject: newTeacher.subject,
+          department: newTeacher.department,
+          phone: newTeacher.phone,
+          address: newTeacher.address,
+        })
       })
-      .select()
-      .single()
 
-    if (userError) {
-      toast.error("Failed to add teacher", { description: userError.message })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to add teacher")
+      }
+
+      setCreatedCredentials({ email: newTeacher.email, password })
+      setNewTeacher({ name: "", email: "", subject: "", department: "", phone: "", address: "" })
+      toast.success("Teacher account created successfully")
+      fetchData()
+    } catch (error: any) {
+      toast.error("Error creating teacher", { description: error.message })
+    } finally {
       setSaving(false)
-      return
     }
-
-    const { error: profileError } = await supabase.from("teacher_profiles").insert({
-      id: userData.id,
-      subject: newTeacher.subject,
-      department: newTeacher.department,
-      join_date: new Date().toISOString().split("T")[0],
-    })
-
-    if (profileError) {
-      toast.error("Failed to create teacher profile", { description: profileError.message })
-      setSaving(false)
-      return
-    }
-
-    setNewTeacher({ name: "", email: "", subject: "", department: "", phone: "", address: "" })
-    setAddDialogOpen(false)
-    setSaving(false)
-    toast.success("Teacher added successfully")
-    fetchData()
   }
 
+  const copyCredentials = () => {
+    if (createdCredentials) {
+      navigator.clipboard.writeText(`Email: ${createdCredentials.email}\nPassword: ${createdCredentials.password}`)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleCloseAddDialog = () => {
+    setAddDialogOpen(false)
+    setCreatedCredentials(null)
+    setCopied(false)
+  }
+
+  // ... (Keep handleSaveEdit and columns)
   const handleSaveEdit = async () => {
     if (!editTeacher) return
     setSaving(true)
@@ -367,6 +385,8 @@ export default function TeachersPage() {
     },
   ]
 
+  // ... (Keep Render Logic, but update Add Dialog content)
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -401,57 +421,89 @@ export default function TeachersPage() {
             </Select>
           </div>
 
-          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+          <Dialog open={addDialogOpen} onOpenChange={handleCloseAddDialog}>
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" />Add Teacher</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Add New Teacher</DialogTitle>
-                <DialogDescription>Enter the teacher&apos;s information below.</DialogDescription>
+                <DialogTitle>{createdCredentials ? "Teacher Account Created" : "Add New Teacher"}</DialogTitle>
+                <DialogDescription>
+                  {createdCredentials 
+                    ? "Share these credentials securely with the teacher." 
+                    : "Create a new teacher account. A secure password will be generated automatically."}
+                </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label>Full Name</Label>
-                  <Input value={newTeacher.name} onChange={(e) => setNewTeacher({ ...newTeacher, name: e.target.value })} placeholder="Enter full name" />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Email</Label>
-                  <Input type="email" value={newTeacher.email} onChange={(e) => setNewTeacher({ ...newTeacher, email: e.target.value })} placeholder="Enter email" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Subject</Label>
-                    <Input value={newTeacher.subject} onChange={(e) => setNewTeacher({ ...newTeacher, subject: e.target.value })} placeholder="e.g., Mathematics" />
+
+              {createdCredentials ? (
+                <div className="space-y-4 py-4">
+                  <div className="rounded-lg bg-muted p-4 space-y-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Email</p>
+                      <p className="font-mono text-sm">{createdCredentials.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Password</p>
+                      <p className="font-mono text-sm break-all">{createdCredentials.password}</p>
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label>Department</Label>
-                    <Select value={newTeacher.department} onValueChange={(v) => setNewTeacher({ ...newTeacher, department: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        {deptList.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <Button onClick={copyCredentials} variant="outline" className="w-full">
+                    {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                    {copied ? "Copied!" : "Copy Credentials"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    The teacher will be prompted to change this password on first login.
+                  </p>
+                  <div className="flex justify-end">
+                    <Button onClick={handleCloseAddDialog}>Done</Button>
                   </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label>Phone Number</Label>
-                  <Input type="tel" value={newTeacher.phone} onChange={(e) => setNewTeacher({ ...newTeacher, phone: e.target.value })} placeholder="Enter phone number" />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Address</Label>
-                  <Textarea value={newTeacher.address} onChange={(e) => setNewTeacher({ ...newTeacher, address: e.target.value })} placeholder="Enter full address" />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3">
-                <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                <Button onClick={handleAddTeacher} disabled={saving}>
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Add Teacher
-                </Button>
-              </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label>Full Name</Label>
+                      <Input value={newTeacher.name} onChange={(e) => setNewTeacher({ ...newTeacher, name: e.target.value })} placeholder="Enter full name" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Email</Label>
+                      <Input type="email" value={newTeacher.email} onChange={(e) => setNewTeacher({ ...newTeacher, email: e.target.value })} placeholder="Enter email" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Subject</Label>
+                        <Input value={newTeacher.subject} onChange={(e) => setNewTeacher({ ...newTeacher, subject: e.target.value })} placeholder="e.g., Mathematics" />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Department</Label>
+                        <Select value={newTeacher.department} onValueChange={(v) => setNewTeacher({ ...newTeacher, department: v })}>
+                          <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                          <SelectContent>
+                            {deptList.map((dept) => (
+                              <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Phone Number</Label>
+                      <Input type="tel" value={newTeacher.phone} onChange={(e) => setNewTeacher({ ...newTeacher, phone: e.target.value })} placeholder="Enter phone number" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Address</Label>
+                      <Textarea value={newTeacher.address} onChange={(e) => setNewTeacher({ ...newTeacher, address: e.target.value })} placeholder="Enter full address" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={handleCloseAddDialog}>Cancel</Button>
+                    <Button onClick={handleAddTeacher} disabled={saving}>
+                      {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Create Account
+                    </Button>
+                  </div>
+                </>
+              )}
             </DialogContent>
           </Dialog>
         </div>

@@ -14,7 +14,6 @@ export async function POST(request: NextRequest) {
   try {
     // SECURITY FIX: Rate Limiting
     const ip = request.headers.get("x-forwarded-for") || "unknown"
-    // Limit admins to creating 10 users per minute to prevent abuse/spam
     const isAllowed = await checkRateLimit(ip, "create-user", 10, 60 * 1000)
     
     if (!isAllowed) {
@@ -49,7 +48,10 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse body
     const body = await request.json()
-    const { email, password, name, role, lrn } = body
+    const { 
+      email, password, name, role, lrn, 
+      subject, department, phone, address 
+    } = body
 
     // SECURITY FIX: Enforce Password Complexity
     const hasMinLength = password && password.length >= 8
@@ -77,7 +79,9 @@ export async function POST(request: NextRequest) {
     })
 
     if (authError) {
-      return NextResponse.json({ error: authError.message }, { status: 400 })
+      // SECURITY FIX: Return generic error for auth failures to prevent enumeration
+      console.error("Auth creation error:", authError.message)
+      return NextResponse.json({ error: "Failed to create user account. Email might already be in use." }, { status: 400 })
     }
 
     if (authData.user) {
@@ -87,20 +91,19 @@ export async function POST(request: NextRequest) {
         email,
         name,
         role,
+        phone: phone || null,
+        address: address || null,
         is_active: true,
         must_change_password: true,
       })
 
       if (userError) {
         // Rollback auth user if DB insert fails
-        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
         
-        if (deleteError) {
-          // CRITICAL: Log orphaned user if rollback fails
-          console.error(`CRITICAL: Orphaned Auth User Created! ID: ${authData.user.id}, Email: ${email}. Reason: DB insert failed and rollback failed. Manual cleanup required.`)
-        }
-        
-        return NextResponse.json({ error: userError.message }, { status: 400 })
+        console.error("DB User insert error:", userError.message)
+        // SECURITY FIX: Generic error message
+        return NextResponse.json({ error: "Failed to create user profile." }, { status: 500 })
       }
 
       // 5. Create role-specific profile
@@ -117,12 +120,14 @@ export async function POST(request: NextRequest) {
         } else if (role === "teacher") {
           await supabaseAdmin.from("teacher_profiles").insert({
             id: authData.user.id,
-            subject: "General",
+            subject: subject || "General",
+            department: department || null,
+            join_date: new Date().toISOString().split("T")[0],
           })
         }
       } catch (profileError) {
-        // Log profile creation error but don't fail the whole request since base user exists
         console.error("Failed to create profile for user:", authData.user.id, profileError)
+        // Don't fail the request as the user account is created, but log it
       }
 
       return NextResponse.json({ 
@@ -134,6 +139,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unknown error" }, { status: 500 })
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Create user error:", error)
+    // SECURITY FIX: Generic error message
+    return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 })
   }
 }
