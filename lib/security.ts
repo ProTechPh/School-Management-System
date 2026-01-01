@@ -37,24 +37,31 @@ export function validateOrigin(request: NextRequest | Request): boolean {
 
 /**
  * Securely extracts the client IP address.
- * Prevents spoofing by prioritizing x-real-ip or using the FIRST address in x-forwarded-for.
+ * Prevents spoofing by prioritizing the platform-provided IP (request.ip).
+ * When falling back to headers, we treat the input carefully.
  */
 export function getClientIp(request: NextRequest | Request): string {
-  // 1. Try x-real-ip first (often set by trusted reverse proxies like Vercel/AWS)
+  // 1. Prefer the platform-provided IP (Available in Next.js/Vercel)
+  // This is the most secure method as it is set by the edge infrastructure
+  if ((request as any).ip) return (request as any).ip
+
+  // 2. Fallback: x-real-ip (Commonly set by trusted reverse proxies)
   const realIp = request.headers.get("x-real-ip")
   if (realIp) return realIp.trim()
 
-  // 2. Fallback to x-forwarded-for
+  // 3. Fallback: x-forwarded-for
+  // WARNING: If the load balancer *appends* the real IP to the end of a user-supplied header,
+  // taking the first element is dangerous (Spoofing).
+  // Taking the *last* element is generally safer in "append" scenarios, though relying on headers
+  // without knowing the specific proxy topology is always slightly risky.
   const forwardedFor = request.headers.get("x-forwarded-for")
   if (forwardedFor) {
-    // Security Fix: Use the FIRST IP in the list.
-    // In standard proxy chains, the first IP is the original client IP.
-    // Appending false IPs to the end is a common spoofing technique.
     const ips = forwardedFor.split(',').map(ip => ip.trim())
-    return ips[0]
+    // Return the last IP in the chain (usually the one connecting to the load balancer)
+    return ips[ips.length - 1]
   }
 
-  return "unknown"
+  return "127.0.0.1"
 }
 
 /**

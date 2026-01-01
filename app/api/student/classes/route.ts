@@ -10,9 +10,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // 1. Fetch Enrolled Classes with Teacher Data
-    // Note: We strictly select only name and avatar for the teacher to prevent PII leak
-    const { data: enrollments } = await supabase
+    const { data: enrollments, error: enrollmentError } = await supabase
       .from("class_students")
       .select(`
         class:classes (
@@ -22,27 +20,29 @@ export async function GET(request: Request) {
       `)
       .eq("student_id", user.id)
 
+    if (enrollmentError) throw enrollmentError
+
     if (!enrollments) {
       return NextResponse.json({ classes: [] })
     }
 
     const classIds = enrollments.map((e: any) => e.class?.id).filter(Boolean)
     
-    // 2. Get student counts for these classes
     let countMap: Record<string, number> = {}
     
     if (classIds.length > 0) {
-      const { data: allEnrollments } = await supabase
+      const { data: allEnrollments, error: countError } = await supabase
         .from("class_students")
         .select("class_id")
         .in("class_id", classIds)
+
+      if (countError) throw countError
 
       allEnrollments?.forEach((e: any) => {
         countMap[e.class_id] = (countMap[e.class_id] || 0) + 1
       })
     }
 
-    // 3. Format Response (DTO)
     const classes = enrollments.map((e: any) => {
       const c = e.class
       return {
@@ -60,6 +60,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ classes })
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("GET Student Classes Error:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }

@@ -60,7 +60,6 @@ export default function StudentQRCheckinPage() {
       if (data) {
         setCurrentStudent(data)
         
-        // Fetch student's check-ins
         const { data: checkinData } = await supabase
           .from("qr_checkins")
           .select(`
@@ -111,13 +110,19 @@ export default function StudentQRCheckinPage() {
 
   const handleScan = async (qrData: string) => {
     if (!currentStudent || submitting) return
+    
+    // Check if location is available before submitting
+    if (userLocation.status !== "success" || !userLocation.latitude || !userLocation.longitude) {
+      toast.error("Location required", { description: "Please enable GPS to check in." })
+      getUserLocation() // Retry fetching location
+      return
+    }
+
     setSubmitting(true)
     setShowScanner(false)
     setResult(null)
 
     try {
-      // Use the secure API route for check-in
-      // Send the raw QR data (which contains timestamp) for server validation
       const response = await fetch("/api/student/check-in", {
         method: "POST",
         headers: {
@@ -138,7 +143,7 @@ export default function StudentQRCheckinPage() {
 
       setResult({ success: true, message: "Successfully checked in!" })
       toast.success("Check-in successful!")
-      fetchUser() // Refresh list
+      fetchUser() 
     } catch (error: any) {
       setResult({ success: false, message: error.message })
       toast.error("Check-in failed", { description: error.message })
@@ -171,7 +176,7 @@ export default function StudentQRCheckinPage() {
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <MapPin className="h-4 w-4" />Location Status
+              <MapPin className="h-4 w-4" />Location Status (GPS)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -215,9 +220,20 @@ export default function StudentQRCheckinPage() {
             <CardDescription>Scan the QR code displayed by your teacher</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button className="w-full" size="lg" onClick={() => setShowScanner(true)} disabled={submitting}>
+            <Button 
+              className="w-full" 
+              size="lg" 
+              onClick={() => setShowScanner(true)} 
+              disabled={submitting || userLocation.status !== "success"}
+            >
               <Camera className="mr-2 h-5 w-5" />Scan QR Code
             </Button>
+
+            {userLocation.status !== "success" && (
+              <div className="text-xs text-center text-amber-500">
+                Location access is required to check in.
+              </div>
+            )}
 
             <div className="text-xs text-center text-muted-foreground">
               QR codes are time-sensitive. Please scan the current code displayed.

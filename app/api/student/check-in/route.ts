@@ -4,35 +4,24 @@ import crypto from "crypto"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { getClientIp } from "@/lib/security"
 
-// Helper to parse IPv4 to unsigned 32-bit integer
-function ipV4ToNumber(ip: string): number {
-  const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some(isNaN)) return 0;
-  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
-}
+// Haversine formula to calculate distance between two coordinates in meters
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3 // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180
+  const φ2 = (lat2 * Math.PI) / 180
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180
 
-// Fix: Proper CIDR matching logic
-function isIpInCidr(ip: string, cidr: string): boolean {
-  if (!cidr.includes('/')) return ip === cidr;
-  
-  try {
-    const [rangeIp, bitsStr] = cidr.split('/');
-    const bits = parseInt(bitsStr, 10);
-    if (bits < 0 || bits > 32) return false;
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
-    const mask = ~(2 ** (32 - bits) - 1);
-    const ipNum = ipV4ToNumber(ip);
-    const rangeNum = ipV4ToNumber(rangeIp);
-
-    return (ipNum & mask) === (rangeNum & mask);
-  } catch (e) {
-    return false;
-  }
+  return R * c
 }
 
 export async function POST(request: Request) {
   try {
-    // Rate Limiting with secure IP
     const ip = getClientIp(request)
     const isAllowed = await checkRateLimit(ip, "check-in", 10, 60 * 1000)
     
@@ -48,7 +37,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { qrData } = body
+    const { qrData, latitude, longitude } = body
 
     // 1. Decode and Validate QR Data
     let payload
@@ -80,7 +69,6 @@ export async function POST(request: Request) {
     }
 
     // Check if QR code is expired
-    // SECURITY FIX: Reduced validity window to 3 seconds to prevent replay attacks
     const now = Date.now()
     const qrAge = now - timestamp
     
@@ -127,28 +115,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 5. Location Verification
+    // 5. Location Verification (GPS)
     if (session.require_location) {
-      // SECURITY FIX: Strict IP Enforcement
-      const allowedIps = process.env.SCHOOL_IP_ADDRESS 
-      
-      if (!allowedIps) {
-        console.error("Location required but SCHOOL_IP_ADDRESS not set")
+      if (latitude === undefined || longitude === undefined) {
         return NextResponse.json({ 
-          error: "System Configuration Error: Location verification is required but not configured. Please contact the administrator." 
+          error: "Location verification required. Please enable GPS." 
+        }, { status: 400 })
+      }
+
+      // Fetch school settings for location
+      const { data: settings } = await supabase
+        .from("school_settings")
+        .select("latitude, longitude, radius_meters")
+        .single()
+
+      if (!settings || settings.latitude === null || settings.longitude === null) {
+        console.error("School location settings not configured")
+        // Fail open or closed depending on policy - here we fail closed for security
+        return NextResponse.json({ 
+          error: "School location not configured. Please contact administrator." 
         }, { status: 500 })
       }
 
-      // Use the secure IP extraction
-      const clientIp = getClientIp(request)
-      
-      const allowedList = allowedIps.split(',').map(ip => ip.trim())
-      const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
-      const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
+      const distance = calculateDistance(
+        latitude, 
+        longitude, 
+        settings.latitude, 
+        settings.longitude
+      )
 
-      if (!isAllowed) {
+      // Allow a small buffer for GPS inaccuracy if needed, but respect the radius setting
+      if (distance > settings.radius_meters) {
         return NextResponse.json({ 
-          error: "Location verification failed: You must be connected to the school network (Wi-Fi) to check in." 
+          error: `You are too far from the school (${Math.round(distance)}m). Maximum allowed distance is ${settings.radius_meters}m.` 
         }, { status: 403 })
       }
     }

@@ -16,22 +16,11 @@ const isValidUrl = (url: string) => {
     if (hostname === 'localhost') return false
     
     // Check for IPv4 private ranges
-    // 10.0.0.0 - 10.255.255.255
     if (hostname.startsWith('10.')) return false
-    
-    // 192.168.0.0 - 192.168.255.255
     if (hostname.startsWith('192.168.')) return false
-    
-    // 172.16.0.0 - 172.31.255.255
     if (hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false
-    
-    // 127.0.0.0 - 127.255.255.255 (Loopback)
     if (hostname.startsWith('127.')) return false
-    
-    // 169.254.0.0 - 169.254.255.255 (Link-local)
     if (hostname.startsWith('169.254.')) return false
-
-    // IPv6 Loopback
     if (hostname === '[::1]') return false
 
     return true
@@ -59,7 +48,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Only fetch lessons created by this teacher
     const { data: lessons, error } = await supabase
       .from("lessons")
       .select(`
@@ -72,7 +60,6 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
-    // SECURITY FIX: DTO Pattern
     const safeLessons = lessons.map((l: any) => ({
       id: l.id,
       title: l.title,
@@ -91,7 +78,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ lessons: safeLessons })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("GET Lessons Error:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -110,7 +98,6 @@ export async function POST(request: Request) {
 
     if (!title || !classId) return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
 
-    // SECURITY FIX: Validate URLs
     if (materials && Array.isArray(materials)) {
       for (const m of materials) {
         if (m.url && !isValidUrl(m.url)) {
@@ -150,7 +137,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, lesson })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("POST Lessons Error:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -164,7 +152,6 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const { id, title, classId, description, content, materials, deletedMaterialIds } = body
 
-    // SECURITY FIX: Validate URLs in updated materials
     if (materials && Array.isArray(materials)) {
       for (const m of materials) {
         if (m.url && !isValidUrl(m.url)) {
@@ -173,7 +160,6 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Verify ownership
     const { data: existingLesson } = await supabase
       .from("lessons")
       .select("teacher_id")
@@ -201,7 +187,6 @@ export async function PUT(request: Request) {
       await supabase.from("lesson_materials").delete().in("id", deletedMaterialIds)
     }
 
-    // Handle upserts/inserts for materials
     if (materials && materials.length > 0) {
       for (const m of materials) {
         if (m.isNew) {
@@ -222,6 +207,7 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("PUT Lessons Error:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }

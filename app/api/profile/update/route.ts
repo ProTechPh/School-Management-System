@@ -3,7 +3,6 @@ import { NextResponse, NextRequest } from "next/server"
 import { validateOrigin, profileUpdateSchema } from "@/lib/security"
 
 export async function POST(request: NextRequest) {
-  // SECURITY FIX: CSRF Check
   if (!validateOrigin(request)) {
     return NextResponse.json({ error: "Invalid Origin" }, { status: 403 })
   }
@@ -16,7 +15,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user role
     const { data: userData } = await supabase
       .from("users")
       .select("role")
@@ -26,18 +24,14 @@ export async function POST(request: NextRequest) {
     const role = userData?.role
     const body = await request.json()
 
-    // SECURITY FIX: Input Validation with Zod
     const validationResult = profileUpdateSchema.safeParse(body)
     
     if (!validationResult.success) {
-      // Return the first error message
       return NextResponse.json({ error: validationResult.error.errors[0].message }, { status: 400 })
     }
 
-    // Use validated data which strips unknown fields
     const validatedData = validationResult.data
     
-    // 1. Update Base User Fields (Safe fields only)
     const allowedUserFields = ["name", "phone", "address", "avatar"]
     const userUpdates: Record<string, any> = {}
 
@@ -56,10 +50,7 @@ export async function POST(request: NextRequest) {
       if (error) throw error
     }
 
-    // 2. Update Role-Specific Fields
     if (role === "student") {
-      // STRICT Whitelist for Students
-      // SECURITY FIX: Removed 'email' to prevent unverified updates
       const allowedStudentFields = [
         "contact_number",
         "current_house_street", "current_barangay", "current_city", "current_province", "current_region",
@@ -71,7 +62,6 @@ export async function POST(request: NextRequest) {
       
       const studentUpdates: Record<string, any> = {}
       for (const field of allowedStudentFields) {
-        // Use validatedData to ensure length limits are respected
         const val = validatedData[field as keyof typeof validatedData]
         if (val !== undefined) {
           studentUpdates[field] = val
@@ -109,6 +99,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Profile Update Error:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
