@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface AttendanceRecord {
   id: string
@@ -30,20 +31,23 @@ export default function StudentAttendancePage() {
     if (!user) return
     setUserId(user.id)
 
+    // SECURITY FIX: Use secure API route instead of direct DB query
     try {
-      // Use secure API route
       const response = await fetch("/api/student/attendance")
-      if (response.ok) {
-        const { records: data } = await response.json()
-        setRecords(data.map((r: any) => ({
-          id: r.id,
-          class_name: r.class?.name || "Unknown",
-          date: r.date,
-          status: r.status,
-        })))
+      if (!response.ok) {
+        throw new Error("Failed to fetch attendance")
       }
+      
+      const { records: data } = await response.json()
+      setRecords(data.map((r: any) => ({
+        id: r.id,
+        class_name: r.class?.name || "Unknown",
+        date: r.date,
+        status: r.status,
+      })))
     } catch (error) {
-      console.error("Failed to fetch attendance", error)
+      console.error("Attendance error:", error)
+      toast.error("Failed to load attendance records")
     } finally {
       setLoading(false)
     }

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { BookOpen, Calendar, ClipboardCheck, TrendingUp, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface ClassInfo {
   id: string
@@ -52,109 +53,36 @@ export default function StudentDashboard() {
   const fetchData = async () => {
     const supabase = createClient()
     
+    // Get user session for the header ID
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setUserId(user.id)
 
-    const { data: userData } = await supabase
-      .from("users")
-      .select("name")
-      .eq("id", user.id)
-      .single()
-    if (userData) setUserName(userData.name)
-
-    // Fetch student's enrolled classes
-    const { data: enrollments } = await supabase
-      .from("class_students")
-      .select(`
-        class:classes (
-          id, name, subject, schedule, room,
-          teacher:users!classes_teacher_id_fkey (name)
-        )
-      `)
-      .eq("student_id", user.id)
-
-    if (enrollments) {
-      const classData = enrollments.map(e => {
-        const c = e.class as any
-        return {
-          id: c.id,
-          name: c.name,
-          subject: c.subject,
-          schedule: c.schedule,
-          room: c.room,
-          teacher_name: c.teacher?.name || null,
-        }
-      })
-      setClasses(classData)
-
-      // Fetch today's schedule
-      const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-      const today = days[new Date().getDay()]
-      const classIds = classData.map(c => c.id)
-
-      if (classIds.length > 0) {
-        const { data: scheduleData } = await supabase
-          .from("schedules")
-          .select(`
-            id, start_time, end_time, room,
-            class:classes (name, teacher:users!classes_teacher_id_fkey (name))
-          `)
-          .in("class_id", classIds)
-          .eq("day", today)
-          .order("start_time")
-
-        if (scheduleData) {
-          setTodaySchedule(scheduleData.map(s => ({
-            id: s.id,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            room: s.room,
-            class_name: (s.class as any)?.name || "Unknown",
-            teacher_name: (s.class as any)?.teacher?.name || null,
-          })))
-        }
+    // SECURITY FIX: Use secure API route instead of direct client-side DB queries
+    try {
+      const response = await fetch("/api/student/dashboard")
+      if (!response.ok) {
+        throw new Error("Failed to load dashboard data")
       }
+      
+      const data = await response.json()
+      
+      setUserName(data.userName)
+      setClasses(data.classes)
+      setTodaySchedule(data.todaySchedule)
+      setGrades(data.grades)
+      setAttendanceRate(data.attendanceRate)
+      
+    } catch (error) {
+      console.error("Dashboard error:", error)
+      toast.error("Failed to load dashboard")
+    } finally {
+      setLoading(false)
     }
-
-    // Fetch grades
-    const { data: gradeData } = await supabase
-      .from("grades")
-      .select(`
-        id, score, max_score, grade, type,
-        class:classes (name)
-      `)
-      .eq("student_id", user.id)
-      .order("date", { ascending: false })
-      .limit(5)
-
-    if (gradeData) {
-      setGrades(gradeData.map(g => ({
-        id: g.id,
-        class_name: (g.class as any)?.name || "Unknown",
-        type: g.type,
-        score: g.score,
-        max_score: g.max_score,
-        grade: g.grade,
-      })))
-    }
-
-    // Calculate attendance rate
-    const { data: attendance } = await supabase
-      .from("attendance_records")
-      .select("status")
-      .eq("student_id", user.id)
-
-    if (attendance && attendance.length > 0) {
-      const present = attendance.filter(a => a.status === "present").length
-      setAttendanceRate(Math.round((present / attendance.length) * 100))
-    }
-
-    setLoading(false)
   }
 
   const avgGrade = grades.length
-    ? Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length)
+    ? Math.round(grades.reduce((sum, g) => sum + g.grade, 0) / grades.length)
     : 0
 
   if (loading) {

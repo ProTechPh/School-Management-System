@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Clock, MapPin, Users, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface ClassInfo {
   id: string
@@ -35,46 +36,22 @@ export default function StudentClassesPage() {
     if (!user) return
     setUserId(user.id)
 
-    const { data: enrollments } = await supabase
-      .from("class_students")
-      .select(`
-        class:classes (
-          id, name, subject, schedule, room,
-          teacher:users!classes_teacher_id_fkey (name, avatar)
-        )
-      `)
-      .eq("student_id", user.id)
-
-    if (enrollments) {
-      const classIds = enrollments.map(e => (e.class as any)?.id).filter(Boolean)
+    // SECURITY FIX: Use secure API route instead of direct DB query
+    try {
+      const response = await fetch("/api/student/classes")
+      if (!response.ok) {
+        throw new Error("Failed to fetch classes")
+      }
       
-      // Get student counts
-      const { data: allEnrollments } = await supabase
-        .from("class_students")
-        .select("class_id")
-        .in("class_id", classIds)
-
-      const countMap: Record<string, number> = {}
-      allEnrollments?.forEach(e => {
-        countMap[e.class_id] = (countMap[e.class_id] || 0) + 1
-      })
-
-      setClasses(enrollments.map(e => {
-        const c = e.class as any
-        return {
-          id: c.id,
-          name: c.name,
-          subject: c.subject,
-          schedule: c.schedule,
-          room: c.room,
-          teacher_name: c.teacher?.name || null,
-          teacher_avatar: c.teacher?.avatar || null,
-          student_count: countMap[c.id] || 0,
-        }
-      }))
+      const data = await response.json()
+      setClasses(data.classes)
+      
+    } catch (error) {
+      console.error("Classes error:", error)
+      toast.error("Failed to load classes")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   if (loading) {

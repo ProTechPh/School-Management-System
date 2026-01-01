@@ -59,8 +59,9 @@ export async function POST(request: NextRequest) {
     // 2. Update Role-Specific Fields
     if (role === "student") {
       // STRICT Whitelist for Students
+      // SECURITY FIX: Removed 'email' to prevent unverified updates
       const allowedStudentFields = [
-        "contact_number", "email",
+        "contact_number",
         "current_house_street", "current_barangay", "current_city", "current_province", "current_region",
         "permanent_same_as_current", "permanent_house_street", "permanent_barangay", "permanent_city", "permanent_province", "permanent_region",
         "father_contact", "mother_contact", "guardian_contact",
