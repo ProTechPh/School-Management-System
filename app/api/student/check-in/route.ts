@@ -29,22 +29,6 @@ function isIpInCidr(ip: string, cidr: string): boolean {
   }
 }
 
-// Haversine formula to calculate distance between two coordinates
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371e3 // Earth's radius in meters
-  const φ1 = (lat1 * Math.PI) / 180
-  const φ2 = (lat2 * Math.PI) / 180
-  const Δφ = ((lat2 - lat1) * Math.PI) / 180
-  const Δλ = ((lon2 - lon1) * Math.PI) / 180
-
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-  return R * c // Distance in meters
-}
-
 export async function POST(request: Request) {
   try {
     // Rate Limiting
@@ -63,7 +47,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { qrData, latitude, longitude } = body
+    const { qrData } = body
 
     // 1. Decode and Validate QR Data
     let payload
@@ -144,62 +128,40 @@ export async function POST(request: Request) {
 
     // 5. Location Verification
     if (session.require_location) {
-      let locationVerified = false;
-
-      // 5a. IP Check (Primary - Secure)
+      // SECURITY FIX: Strict IP Enforcement
+      // We do NOT trust client-provided GPS coordinates as they can be easily spoofed.
+      // We only rely on server-side IP verification.
+      
       const allowedIps = process.env.SCHOOL_IP_ADDRESS 
       
-      if (allowedIps) {
-        const realIp = request.headers.get("x-real-ip")
-        let clientIp = "unknown"
-
-        if (realIp) {
-          clientIp = realIp
-        } else {
-          const forwardedFor = request.headers.get("x-forwarded-for")
-          if (forwardedFor) {
-            clientIp = forwardedFor.split(',')[0].trim()
-          }
-        }
-        
-        const allowedList = allowedIps.split(',').map(ip => ip.trim())
-        const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
-        const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
-
-        if (isAllowed) {
-          locationVerified = true;
-        } else {
-          // SECURITY FIX: Strict enforcement. If IP whitelist is configured, fail immediately if no match.
-          // Do not fallback to GPS if IP restriction is active, as GPS is easily spoofed.
-          return NextResponse.json({ 
-            error: "Location verification failed: You must be connected to the school network (Wi-Fi)." 
-          }, { status: 403 })
-        }
+      if (!allowedIps) {
+        // Fail closed if IP restriction is not configured but location is required
+        console.error("Location required but SCHOOL_IP_ADDRESS not set")
+        return NextResponse.json({ 
+          error: "System Configuration Error: Location verification is required but not configured. Please contact the administrator." 
+        }, { status: 500 })
       }
 
-      // 5b. GPS Check (Secondary / Advisory)
-      // Only used if SCHOOL_IP_ADDRESS is NOT set.
-      if (!locationVerified) {
-        if (!latitude || !longitude) {
-          return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })
+      const realIp = request.headers.get("x-real-ip")
+      let clientIp = "unknown"
+
+      if (realIp) {
+        clientIp = realIp
+      } else {
+        const forwardedFor = request.headers.get("x-forwarded-for")
+        if (forwardedFor) {
+          clientIp = forwardedFor.split(',')[0].trim()
         }
+      }
+      
+      const allowedList = allowedIps.split(',').map(ip => ip.trim())
+      const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"
+      const isAllowed = isLocal || allowedList.some(allowed => isIpInCidr(clientIp, allowed))
 
-        const { data: schoolSettings } = await supabase
-          .from("school_settings")
-          .select("latitude, longitude, radius_meters")
-          .single()
-        
-        const schoolLat = schoolSettings?.latitude || 14.5995
-        const schoolLng = schoolSettings?.longitude || 120.9842
-        const radius = schoolSettings?.radius_meters || 500
-
-        const distance = calculateDistance(latitude, longitude, schoolLat, schoolLng)
-
-        if (distance > radius) {
-          return NextResponse.json({ 
-            error: `You are too far from school (${Math.round(distance)}m). Must be within ${radius}m.` 
-          }, { status: 403 })
-        }
+      if (!isAllowed) {
+        return NextResponse.json({ 
+          error: "Location verification failed: You must be connected to the school network (Wi-Fi) to check in." 
+        }, { status: 403 })
       }
     }
 
@@ -242,6 +204,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true })
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Check-in error:", error)
+    return NextResponse.json({ error: "Failed to process check-in." }, { status: 500 })
   }
 }

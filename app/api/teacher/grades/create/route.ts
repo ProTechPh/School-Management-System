@@ -100,6 +100,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, grade: data })
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Create grade error:", error)
+    return NextResponse.json({ error: "Failed to create grade record." }, { status: 500 })
   }
 }

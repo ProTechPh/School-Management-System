@@ -58,6 +58,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ students: safeStudents })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Fetch students error:", error)
+    return NextResponse.json({ error: "Failed to fetch student records." }, { status: 500 })
   }
 }
