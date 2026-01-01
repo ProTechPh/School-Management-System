@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { AVATAR_BUCKET, generateAvatarPath } from "@/lib/supabase/storage"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 // Magic numbers for file type validation
 const FILE_SIGNATURES: Record<string, string> = {
@@ -13,8 +14,8 @@ const FILE_SIGNATURES: Record<string, string> = {
 
 export async function POST(request: Request) {
   try {
-    // SECURITY FIX: Rate Limiting
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // SECURITY FIX: Rate Limiting with secure IP
+    const ip = getClientIp(request)
     // Limit to 5 uploads per 10 minutes
     const isAllowed = await checkRateLimit(ip, "upload-avatar", 5, 10 * 60 * 1000)
     
@@ -42,7 +43,6 @@ export async function POST(request: Request) {
     }
 
     // 2. Validate File Type via Magic Numbers
-    // SECURITY FIX: Only read the first 4 bytes to prevent OOM on large spoofed files
     const headerBlob = file.slice(0, 4)
     const buffer = await headerBlob.arrayBuffer()
     const header = Array.from(new Uint8Array(buffer))

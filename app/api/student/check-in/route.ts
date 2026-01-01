@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 // Helper to parse IPv4 to unsigned 32-bit integer
 function ipV4ToNumber(ip: string): number {
@@ -31,8 +32,8 @@ function isIpInCidr(ip: string, cidr: string): boolean {
 
 export async function POST(request: Request) {
   try {
-    // Rate Limiting
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // Rate Limiting with secure IP
+    const ip = getClientIp(request)
     const isAllowed = await checkRateLimit(ip, "check-in", 10, 60 * 1000)
     
     if (!isAllowed) {
@@ -129,30 +130,17 @@ export async function POST(request: Request) {
     // 5. Location Verification
     if (session.require_location) {
       // SECURITY FIX: Strict IP Enforcement
-      // We do NOT trust client-provided GPS coordinates as they can be easily spoofed.
-      // We only rely on server-side IP verification.
-      
       const allowedIps = process.env.SCHOOL_IP_ADDRESS 
       
       if (!allowedIps) {
-        // Fail closed if IP restriction is not configured but location is required
         console.error("Location required but SCHOOL_IP_ADDRESS not set")
         return NextResponse.json({ 
           error: "System Configuration Error: Location verification is required but not configured. Please contact the administrator." 
         }, { status: 500 })
       }
 
-      const realIp = request.headers.get("x-real-ip")
-      let clientIp = "unknown"
-
-      if (realIp) {
-        clientIp = realIp
-      } else {
-        const forwardedFor = request.headers.get("x-forwarded-for")
-        if (forwardedFor) {
-          clientIp = forwardedFor.split(',')[0].trim()
-        }
-      }
+      // Use the secure IP extraction
+      const clientIp = getClientIp(request)
       
       const allowedList = allowedIps.split(',').map(ip => ip.trim())
       const isLocal = clientIp === "::1" || clientIp === "127.0.0.1"

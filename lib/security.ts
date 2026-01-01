@@ -5,39 +5,67 @@ import { NextRequest, NextResponse } from "next/server"
  * Validates that the request originated from the same domain.
  * This adds a layer of CSRF protection for API routes.
  */
-export function validateOrigin(request: NextRequest): boolean {
+export function validateOrigin(request: NextRequest | Request): boolean {
   const origin = request.headers.get("origin")
   const referer = request.headers.get("referer")
   
   // STRICT MODE: Block requests with missing headers for state-changing methods.
-  // This prevents attackers from bypassing checks by stripping headers.
   if (!origin && !referer) return false 
 
   const host = request.headers.get("host") // e.g. localhost:3000
   
   if (origin) {
-    const originUrl = new URL(origin)
-    return originUrl.host === host
+    try {
+      const originUrl = new URL(origin)
+      return originUrl.host === host
+    } catch {
+      return false
+    }
   }
 
   if (referer) {
-    const refererUrl = new URL(referer)
-    return refererUrl.host === host
+    try {
+      const refererUrl = new URL(referer)
+      return refererUrl.host === host
+    } catch {
+      return false
+    }
   }
 
   return false
 }
 
 /**
+ * Securely extracts the client IP address.
+ * Prevents spoofing by prioritizing x-real-ip or using the last address in x-forwarded-for.
+ */
+export function getClientIp(request: NextRequest | Request): string {
+  // 1. Try x-real-ip first (often set by trusted reverse proxies like Vercel/AWS)
+  const realIp = request.headers.get("x-real-ip")
+  if (realIp) return realIp.trim()
+
+  // 2. Fallback to x-forwarded-for
+  const forwardedFor = request.headers.get("x-forwarded-for")
+  if (forwardedFor) {
+    // Security Fix: Use the LAST IP in the list.
+    // When a client sends a spoofed "X-Forwarded-For: fake-ip", the load balancer 
+    // appends the real IP to the end: "fake-ip, real-ip".
+    const ips = forwardedFor.split(',').map(ip => ip.trim())
+    return ips[ips.length - 1]
+  }
+
+  return "unknown"
+}
+
+/**
  * Zod schema for user profile updates.
- * SECURITY FIX: Explicitly defined fields with max lengths. No passthrough.
  */
 export const profileUpdateSchema = z.object({
   // Base User Fields
   name: z.string().min(2).max(100).regex(/^[a-zA-Z0-9\s\.\-]+$/, "Name contains invalid characters").refine(val => !val.toLowerCase().includes("admin"), "Invalid name").optional(),
   phone: z.string().max(20).optional().nullable(),
   address: z.string().max(200).optional().nullable(),
-  // SECURITY FIX: Prevent Stored XSS by enforcing valid URL protocol
+  // Prevent Stored XSS by enforcing valid URL protocol
   avatar: z.string().url().max(500).refine((val) => val.startsWith("http://") || val.startsWith("https://"), {
     message: "Avatar URL must start with http:// or https://"
   }).optional().nullable(),
