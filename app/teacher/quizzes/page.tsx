@@ -1,4 +1,656 @@
-.percentage}%)</Badge>
+"use client"
+
+import { useState, useEffect } from "react"
+import { toast } from "sonner"
+import { DashboardHeader } from "@/components/dashboard-header"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import { Plus, Clock, Users, FileQuestion, Trash2, Eye, BarChart, UserPlus, CalendarClock, Loader2, Edit3, AlertTriangle, MousePointer, Copy, LogOut, Info } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
+import { useNotificationStore } from "@/lib/notification-store"
+import { createClient } from "@/lib/supabase/client"
+
+type QuestionType = "multiple-choice" | "true-false" | "identification" | "essay"
+
+interface QuizQuestion {
+  id: string
+  type: QuestionType
+  question: string
+  options?: string[]
+  correctAnswer?: number | string
+  points: number
+  caseSensitive?: boolean
+}
+
+interface QuizReopen {
+  id: string
+  student_id: string
+  student: { id: string; name: string }
+  reason: string | null
+  new_due_date: string
+  created_at: string
+}
+
+interface Quiz {
+  id: string
+  title: string
+  class_id: string
+  class: { id: string; name: string; grade: string; section: string }
+  description: string | null
+  duration: number
+  due_date: string | null
+  status: string
+  created_at: string
+  questions: any[]
+  reopens: QuizReopen[]
+}
+
+interface QuizAttempt {
+  id: string
+  quiz_id: string
+  student_id: string
+  student: { id: string; name: string }
+  score: number
+  max_score: number
+  percentage: number
+  needs_grading: boolean
+  completed_at: string
+  tab_switches?: number
+  copy_paste_count?: number
+  exit_attempts?: number
+}
+
+interface AttemptAnswer {
+  id: string
+  attempt_id: string
+  question_id: string
+  answer: string
+  is_correct: boolean
+  points_awarded: number
+  question?: {
+    id: string
+    question: string
+    type: string
+    options: string[] | null
+    correct_answer: string | null
+    points: number
+  }
+}
+
+interface ActivityLog {
+  id: string
+  event_type: string
+  details: string | null
+  created_at: string
+}
+
+interface ClassData {
+  id: string
+  name: string
+  grade: string
+  section: string
+}
+
+interface StudentData {
+  id: string
+  name: string
+}
+
+export default function TeacherQuizzesPage() {
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState("")
+  const [teacherClasses, setTeacherClasses] = useState<ClassData[]>([])
+  const [quizzes, setQuizzes] = useState<Quiz[]>([])
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([])
+  const [classStudents, setClassStudents] = useState<Record<string, StudentData[]>>({})
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [viewingQuiz, setViewingQuiz] = useState<Quiz | null>(null)
+  const [viewingQuizDetails, setViewingQuizDetails] = useState<Quiz | null>(null)
+  const [reopenQuiz, setReopenQuiz] = useState<Quiz | null>(null)
+  const [gradingAttempt, setGradingAttempt] = useState<QuizAttempt | null>(null)
+  const [gradingAnswers, setGradingAnswers] = useState<AttemptAnswer[]>([])
+  const [gradingLoading, setGradingLoading] = useState(false)
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
+  const [attemptActivitySummary, setAttemptActivitySummary] = useState<{ tab_switches: number; copy_paste_count: number; exit_attempts: number } | null>(null)
+  const [reopenData, setReopenData] = useState({
+    studentId: "",
+    reason: "",
+    newDueDate: "",
+  })
+  const { addNotification } = useNotificationStore()
+
+  const [newQuiz, setNewQuiz] = useState({
+    title: "",
+    classId: "",
+    description: "",
+    duration: 30,
+    dueDate: "",
+    questions: [] as QuizQuestion[],
+  })
+
+  const [questionType, setQuestionType] = useState<QuestionType>("multiple-choice")
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    setUserId(user.id)
+
+    const { data: classes } = await supabase
+      .from("classes")
+      .select("id, name, grade, section")
+      .eq("teacher_id", user.id)
+      .order("name")
+
+    if (classes) {
+      setTeacherClasses(classes)
+      const studentsMap: Record<string, StudentData[]> = {}
+      for (const cls of classes) {
+        const { data: classStudentsData } = await supabase
+          .from("class_students")
+          .select("student:users!class_students_student_id_fkey (id, name)")
+          .eq("class_id", cls.id)
+        
+        if (classStudentsData) {
+          studentsMap[cls.id] = classStudentsData.map(d => d.student as unknown as StudentData)
+        }
+      }
+      setClassStudents(studentsMap)
+    }
+
+    const { data: quizzesData } = await supabase
+      .from("quizzes")
+      .select(`
+        *,
+        class:classes (id, name, grade, section),
+        questions:quiz_questions (*),
+        reopens:quiz_reopens (
+          *,
+          student:users!quiz_reopens_student_id_fkey (id, name)
+        )
+      `)
+      .eq("teacher_id", user.id)
+      .order("created_at", { ascending: false })
+
+    if (quizzesData) {
+      setQuizzes(quizzesData as Quiz[])
+    }
+
+    const { data: attemptsData } = await supabase
+      .from("quiz_attempts")
+      .select(`
+        *,
+        student:users!quiz_attempts_student_id_fkey (id, name),
+        quiz:quizzes!inner (teacher_id)
+      `)
+      .eq("quiz.teacher_id", user.id)
+      .not("completed_at", "is", null)
+      .order("completed_at", { ascending: false })
+
+    if (attemptsData) {
+      setQuizAttempts(attemptsData as any[])
+    }
+
+    setLoading(false)
+  }
+
+  const handleAddQuestion = (type: QuestionType = questionType) => {
+    let question: QuizQuestion
+
+    switch (type) {
+      case "multiple-choice":
+        question = {
+          id: `qq${Date.now()}`,
+          type: "multiple-choice",
+          question: "",
+          options: ["", "", "", ""],
+          correctAnswer: 0,
+          points: 10,
+        }
+        break
+      case "true-false":
+        question = {
+          id: `qq${Date.now()}`,
+          type: "true-false",
+          question: "",
+          options: ["True", "False"],
+          correctAnswer: 0,
+          points: 5,
+        }
+        break
+      case "identification":
+        question = {
+          id: `qq${Date.now()}`,
+          type: "identification",
+          question: "",
+          correctAnswer: "",
+          points: 10,
+          caseSensitive: false,
+        }
+        break
+      case "essay":
+        question = {
+          id: `qq${Date.now()}`,
+          type: "essay",
+          question: "",
+          points: 20,
+        }
+        break
+    }
+
+    setNewQuiz((prev) => ({
+      ...prev,
+      questions: [...prev.questions, question],
+    }))
+  }
+
+  const handleRemoveQuestion = (id: string) => {
+    setNewQuiz((prev) => ({
+      ...prev,
+      questions: prev.questions.filter((q) => q.id !== id),
+    }))
+  }
+
+  const handleQuestionChange = (id: string, field: string, value: string | number | string[] | boolean) => {
+    setNewQuiz((prev) => ({
+      ...prev,
+      questions: prev.questions.map((q) => (q.id === id ? { ...q, [field]: value } : q)),
+    }))
+  }
+
+  const handleOptionChange = (questionId: string, optionIndex: number, value: string) => {
+    setNewQuiz((prev) => ({
+      ...prev,
+      questions: prev.questions.map((q) =>
+        q.id === questionId && q.options 
+          ? { ...q, options: q.options.map((opt, i) => (i === optionIndex ? value : opt)) } 
+          : q,
+      ),
+    }))
+  }
+
+  const handleCreateQuiz = async () => {
+    const selectedClass = teacherClasses.find((c) => c.id === newQuiz.classId)
+    if (!selectedClass || !newQuiz.title || newQuiz.questions.length === 0) return
+
+    setCreating(true)
+
+    try {
+      const response = await fetch("/api/teacher/create-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newQuiz)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create quiz")
+      }
+
+      addNotification({
+        userId: "student",
+        userRole: "student",
+        title: "New Quiz Available",
+        message: `A new quiz '${newQuiz.title}' has been published for ${selectedClass.name}`,
+        type: "quiz",
+        read: false,
+        link: "/student/quizzes",
+      })
+
+      setNewQuiz({ title: "", classId: "", description: "", duration: 30, dueDate: "", questions: [] })
+      setIsCreateOpen(false)
+      toast.success("Quiz created successfully")
+      fetchData()
+    } catch (error: any) {
+      toast.error("Failed to create quiz", { description: error.message })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const getQuizAttempts = (quizId: string) => {
+    return quizAttempts.filter((a) => a.quiz_id === quizId)
+  }
+
+  const getStudentsWhoHaventTaken = (quiz: Quiz) => {
+    const students = classStudents[quiz.class_id] || []
+    const attemptedStudentIds = quizAttempts
+      .filter((a) => a.quiz_id === quiz.id)
+      .map((a) => a.student_id)
+    
+    return students.filter((s) => !attemptedStudentIds.includes(s.id))
+  }
+
+  const handleOpenGrading = async (attempt: QuizAttempt) => {
+    setGradingAttempt(attempt)
+    setGradingLoading(true)
+    
+    try {
+      const response = await fetch(`/api/teacher/grading/${attempt.id}`)
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch grading data")
+      }
+
+      const data = await response.json()
+      
+      setGradingAnswers(data.answers || [])
+      setActivityLogs(data.logs || [])
+      setAttemptActivitySummary(data.attempt)
+      
+    } catch (error: any) {
+      console.error("Grading fetch error:", error)
+      toast.error("Failed to load grading details")
+      setGradingAttempt(null)
+    } finally {
+      setGradingLoading(false)
+    }
+  }
+
+  const handleUpdateAnswer = (answerId: string, field: "is_correct" | "points_awarded", value: boolean | number) => {
+    setGradingAnswers(prev => prev.map(a => {
+      if (a.id === answerId) {
+        if (field === "is_correct") {
+          const points = value ? (a.question?.points || 0) : 0
+          return { ...a, is_correct: value as boolean, points_awarded: points }
+        }
+        return { ...a, points_awarded: value as number }
+      }
+      return a
+    }))
+  }
+
+  const handleSaveGrading = async () => {
+    if (!gradingAttempt) return
+    setGradingLoading(true)
+
+    const supabase = createClient()
+    
+    for (const answer of gradingAnswers) {
+      await supabase
+        .from("quiz_attempt_answers")
+        .update({
+          is_correct: answer.is_correct,
+          points_awarded: answer.points_awarded,
+          graded_by: userId,
+          graded_at: new Date().toISOString()
+        })
+        .eq("id", answer.id)
+    }
+
+    const newScore = gradingAnswers.reduce((sum, a) => sum + (a.points_awarded || 0), 0)
+    const maxScore = gradingAnswers.reduce((sum, a) => sum + (a.question?.points || 0), 0)
+    const newPercentage = maxScore > 0 ? Math.round((newScore / maxScore) * 100) : 0
+
+    await supabase
+      .from("quiz_attempts")
+      .update({
+        score: newScore,
+        percentage: newPercentage,
+        needs_grading: false
+      })
+      .eq("id", gradingAttempt.id)
+
+    toast.success("Grading saved successfully")
+    setGradingAttempt(null)
+    setGradingAnswers([])
+    setGradingLoading(false)
+    fetchData()
+  }
+
+  const handleReopenForStudent = async () => {
+    if (!reopenQuiz || !reopenData.studentId || !reopenData.newDueDate) return
+
+    const supabase = createClient()
+    const student = classStudents[reopenQuiz.class_id]?.find((s) => s.id === reopenData.studentId)
+    if (!student) return
+
+    const { error } = await supabase.from("quiz_reopens").insert({
+      quiz_id: reopenQuiz.id,
+      student_id: reopenData.studentId,
+      reason: reopenData.reason || null,
+      new_due_date: reopenData.newDueDate,
+    })
+
+    if (error) {
+      toast.error("Failed to reopen quiz", { description: error.message })
+      return
+    }
+
+    addNotification({
+      userId: reopenData.studentId,
+      userRole: "student",
+      title: "Quiz Reopened For You",
+      message: `The quiz '${reopenQuiz.title}' has been reopened for you until ${reopenData.newDueDate}. Reason: ${reopenData.reason || "Excused"}`,
+      type: "quiz",
+      read: false,
+      link: "/student/quizzes",
+    })
+
+    setReopenData({ studentId: "", reason: "", newDueDate: "" })
+    setReopenQuiz(null)
+    toast.success("Quiz reopened for student")
+    fetchData()
+  }
+
+  const handleRemoveReopenEntry = async (quizId: string, studentId: string) => {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("quiz_reopens")
+      .delete()
+      .eq("quiz_id", quizId)
+      .eq("student_id", studentId)
+    
+    if (error) {
+      toast.error("Failed to remove reopen entry", { description: error.message })
+      return
+    }
+    toast.success("Reopen entry removed")
+    fetchData()
+  }
+
+  const isQuizExpired = (quiz: Quiz) => {
+    return quiz.due_date ? new Date(quiz.due_date) < new Date() : false
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <DashboardHeader title="Quizzes" subtitle="Create and manage quizzes" />
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen">
+      <DashboardHeader title="Quizzes" subtitle="Create and manage quizzes" userId={userId} />
+      <div className="p-4 lg:p-6">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">My Quizzes</h2>
+            <p className="text-sm text-muted-foreground">{quizzes.length} quizzes created</p>
+          </div>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus className="mr-2 h-4 w-4" />Create Quiz</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create New Quiz</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Quiz Title</Label>
+                    <Input id="title" placeholder="Enter quiz title" value={newQuiz.title} onChange={(e) => setNewQuiz((prev) => ({ ...prev, title: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="class">Class</Label>
+                    <Select value={newQuiz.classId} onValueChange={(value) => setNewQuiz((prev) => ({ ...prev, classId: value }))}>
+                      <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                      <SelectContent>
+                        {teacherClasses.map((cls) => (
+                          <SelectItem key={cls.id} value={cls.id}>{cls.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="duration">Duration (minutes)</Label>
+                    <Input id="duration" type="number" min={5} value={newQuiz.duration} onChange={(e) => setNewQuiz((prev) => ({ ...prev, duration: Number.parseInt(e.target.value) || 30 }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dueDate">Due Date</Label>
+                    <Input id="dueDate" type="date" value={newQuiz.dueDate} onChange={(e) => setNewQuiz((prev) => ({ ...prev, dueDate: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea id="description" placeholder="Brief description of the quiz" value={newQuiz.description} onChange={(e) => setNewQuiz((prev) => ({ ...prev, description: e.target.value }))} />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Questions ({newQuiz.questions.length})</Label>
+                    <div className="flex items-center gap-2">
+                      <Select value={questionType} onValueChange={(v) => setQuestionType(v as QuestionType)}>
+                        <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="multiple-choice">Multiple Choice</SelectItem>
+                          <SelectItem value="true-false">True/False</SelectItem>
+                          <SelectItem value="identification">Identification</SelectItem>
+                          <SelectItem value="essay">Essay</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="outline" size="sm" onClick={() => handleAddQuestion()}><Plus className="mr-1 h-3 w-3" />Add</Button>
+                    </div>
+                  </div>
+                  {newQuiz.questions.length > 0 ? (
+                    <div className="space-y-4">
+                      {newQuiz.questions.map((question, qIndex) => (
+                        <div key={question.id} className="rounded-lg border border-border bg-muted/30 p-4">
+                          <div className="mb-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-foreground">Question {qIndex + 1}</span>
+                              <Badge variant="outline" className="text-xs capitalize">{question.type.replace("-", " ")}</Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Input type="number" min={1} className="w-20" placeholder="Points" value={question.points} onChange={(e) => handleQuestionChange(question.id, "points", Number.parseInt(e.target.value) || 10)} />
+                              <span className="text-sm text-muted-foreground">pts</span>
+                              <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => handleRemoveQuestion(question.id)}><Trash2 className="h-4 w-4" /></Button>
+                            </div>
+                          </div>
+                          <Input className="mb-3" placeholder="Enter question" value={question.question} onChange={(e) => handleQuestionChange(question.id, "question", e.target.value)} />
+                          {question.type === "multiple-choice" && question.options && (
+                            <div className="space-y-2">
+                              {question.options.map((option, oIndex) => (
+                                <div key={oIndex} className="flex items-center gap-2">
+                                  <input type="radio" name={`correct-${question.id}`} checked={question.correctAnswer === oIndex} onChange={() => handleQuestionChange(question.id, "correctAnswer", oIndex)} className="h-4 w-4 accent-primary" />
+                                  <Input placeholder={`Option ${oIndex + 1}`} value={option} onChange={(e) => handleOptionChange(question.id, oIndex, e.target.value)} />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {question.type === "true-false" && question.options && (
+                            <div className="flex gap-4">
+                              {question.options.map((option, oIndex) => (
+                                <label key={oIndex} className="flex items-center gap-2 cursor-pointer">
+                                  <input type="radio" name={`correct-${question.id}`} checked={question.correctAnswer === oIndex} onChange={() => handleQuestionChange(question.id, "correctAnswer", oIndex)} className="h-4 w-4 accent-primary" />
+                                  <span className="text-sm">{option}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          {question.type === "identification" && (
+                            <div className="space-y-2">
+                              <Input placeholder="Correct answer" value={question.correctAnswer as string || ""} onChange={(e) => handleQuestionChange(question.id, "correctAnswer", e.target.value)} />
+                              <div className="flex items-center gap-2">
+                                <Switch id={`case-${question.id}`} checked={question.caseSensitive || false} onCheckedChange={(checked) => handleQuestionChange(question.id, "caseSensitive", checked)} />
+                                <Label htmlFor={`case-${question.id}`} className="text-xs text-muted-foreground">Case sensitive</Label>
+                              </div>
+                            </div>
+                          )}
+                          {question.type === "essay" && (
+                            <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">Essay questions require manual grading by the teacher.</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border p-6 text-center">
+                      <FileQuestion className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Add questions to your quiz</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                  <Button onClick={handleCreateQuiz} disabled={creating || !newQuiz.title || !newQuiz.classId || newQuiz.questions.length === 0}>
+                    {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Create Quiz
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <Dialog open={!!viewingQuiz} onOpenChange={() => setViewingQuiz(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{viewingQuiz?.title} - Results</DialogTitle>
+            </DialogHeader>
+            {viewingQuiz && (
+              <div className="py-4">
+                <div className="mb-4 grid grid-cols-3 gap-4">
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-2xl font-bold text-foreground">{getQuizAttempts(viewingQuiz.id).length}</p>
+                    <p className="text-xs text-muted-foreground">Submissions</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-2xl font-bold text-foreground">
+                      {getQuizAttempts(viewingQuiz.id).length > 0 ? Math.round(getQuizAttempts(viewingQuiz.id).reduce((sum, a) => sum + a.percentage, 0) / getQuizAttempts(viewingQuiz.id).length) : 0}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">Average Score</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-2xl font-bold text-foreground">{viewingQuiz.questions?.length || 0}</p>
+                    <p className="text-xs text-muted-foreground">Questions</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h4 className="font-medium text-foreground">Student Submissions</h4>
+                  {getQuizAttempts(viewingQuiz.id).length > 0 ? (
+                    <div className="space-y-2">
+                      {getQuizAttempts(viewingQuiz.id).map((attempt) => (
+                        <div key={attempt.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-foreground">{attempt.student?.name}</p>
+                              {attempt.needs_grading && <Badge variant="outline" className="text-amber-500 border-amber-500 text-xs">Needs Grading</Badge>}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Completed {new Date(attempt.completed_at).toLocaleDateString()}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={attempt.percentage >= 70 ? "default" : "destructive"}>{attempt.score}/{attempt.max_score} ({attempt.percentage}%)</Badge>
                             <Button variant="outline" size="sm" onClick={() => handleOpenGrading(attempt)}><Edit3 className="h-3 w-3 mr-1" />Grade</Button>
                           </div>
                         </div>
@@ -28,7 +680,11 @@
                   <div><span className="text-muted-foreground">Percentage:</span><span className="ml-2 font-medium">{gradingAnswers.length > 0 ? Math.round((gradingAnswers.reduce((sum, a) => sum + (a.points_awarded || 0), 0) / gradingAnswers.reduce((sum, a) => sum + (a.question?.points || 0), 0)) * 100) : 0}%</span></div>
                 </div>
 
-                {attemptActivitySummary && (attemptActivitySummary.tab_switches && attemptActivitySummary.tab_switches > 0 || attemptActivitySummary.copy_paste_count && attemptActivitySummary.copy_paste_count > 0 || attemptActivitySummary.exit_attempts && attemptActivitySummary.exit_attempts > 0) && (
+                {attemptActivitySummary && (
+                  (attemptActivitySummary.tab_switches && attemptActivitySummary.tab_switches > 0) || 
+                  (attemptActivitySummary.copy_paste_count && attemptActivitySummary.copy_paste_count > 0) || 
+                  (attemptActivitySummary.exit_attempts && attemptActivitySummary.exit_attempts > 0)
+                ) && (
                   <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
