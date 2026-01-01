@@ -190,6 +190,7 @@ export async function PUT(request: Request) {
       }
     }
 
+    // Verify Lesson Ownership
     const { data: existingLesson } = await supabase
       .from("lessons")
       .select("teacher_id")
@@ -214,7 +215,12 @@ export async function PUT(request: Request) {
     if (error) throw error
 
     if (deletedMaterialIds?.length > 0) {
-      await supabase.from("lesson_materials").delete().in("id", deletedMaterialIds)
+      // SECURITY FIX: Ensure deleted materials belong to the current lesson to prevent IDOR
+      await supabase
+        .from("lesson_materials")
+        .delete()
+        .in("id", deletedMaterialIds)
+        .eq("lesson_id", id) 
     }
 
     if (materials && materials.length > 0) {
@@ -227,10 +233,14 @@ export async function PUT(request: Request) {
              url: m.url
            })
         } else if (!m.id.startsWith("temp-")) {
-           await supabase.from("lesson_materials").update({
-             name: m.name,
-             url: m.url
-           }).eq("id", m.id)
+           // SECURITY FIX: Ensure updated material belongs to the current lesson
+           await supabase.from("lesson_materials")
+             .update({
+               name: m.name,
+               url: m.url
+             })
+             .eq("id", m.id)
+             .eq("lesson_id", id) 
         }
       }
     }

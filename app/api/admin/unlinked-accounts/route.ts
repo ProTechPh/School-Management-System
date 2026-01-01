@@ -20,8 +20,6 @@ export async function GET(request: Request) {
     }
 
     // 2. Fetch Unlinked Accounts Efficiently using RPC
-    // This avoids fetching all users and profiles to application memory
-    // and prevents the large "NOT IN" query issue.
     const { data: unlinkedStudents, error } = await supabase.rpc('get_unlinked_students')
     
     if (error) {
@@ -61,7 +59,8 @@ async function legacyFetch(supabase: any) {
     .limit(100) // Safety limit
   
   if (linkedIds.length > 0) {
-    query = query.not('id', 'in', `(${linkedIds.join(',')})`)
+    // SECURITY FIX: Use proper array syntax instead of string interpolation
+    query = query.not('id', 'in', linkedIds)
   }
   
   const { data: unlinkedStudents } = await query

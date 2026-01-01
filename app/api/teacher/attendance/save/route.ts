@@ -27,18 +27,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid data" }, { status: 400 })
     }
 
-    // Verify ownership of the class for the first record (assuming batch is for one class)
-    // A stricter implementation would check every record or group by class_id
-    const classId = records[0].class_id
+    // SECURITY FIX: Verify ownership of ALL classes in the batch
+    const uniqueClassIds = [...new Set(records.map((r: any) => r.class_id))]
     
-    const { data: classData } = await supabase
+    const { count, error: countError } = await supabase
       .from("classes")
-      .select("teacher_id")
-      .eq("id", classId)
-      .single()
+      .select("id", { count: "exact", head: true })
+      .in("id", uniqueClassIds)
+      .eq("teacher_id", user.id)
 
-    if (!classData || classData.teacher_id !== user.id) {
-      return NextResponse.json({ error: "Forbidden: You do not own this class" }, { status: 403 })
+    if (countError) throw countError
+
+    // If the number of owned classes found doesn't match the number of unique classes in the request,
+    // it means the teacher is trying to submit attendance for a class they don't own.
+    if (count !== uniqueClassIds.length) {
+      return NextResponse.json({ error: "Forbidden: You do not own one or more classes in this batch" }, { status: 403 })
     }
 
     const { error } = await supabase.from("attendance_records").upsert(records, {
