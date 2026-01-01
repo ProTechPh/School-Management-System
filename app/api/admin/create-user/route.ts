@@ -6,13 +6,13 @@ import { validateOrigin } from "@/lib/security"
 import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
-  // SECURITY FIX: CSRF Check
+  // CSRF Check
   if (!validateOrigin(request)) {
     return NextResponse.json({ error: "Invalid Origin" }, { status: 403 })
   }
 
   try {
-    // SECURITY FIX: Rate Limiting
+    // Rate Limiting
     const ip = request.headers.get("x-forwarded-for") || "unknown"
     const isAllowed = await checkRateLimit(ip, "create-user", 10, 60 * 1000)
     
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       subject, department, phone, address 
     } = body
 
-    // SECURITY FIX: Enforce Password Complexity
+    // Enforce Password Complexity
     const hasMinLength = password && password.length >= 8
     const hasNumber = /\d/.test(password)
     const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password)
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     if (authError) {
       // SECURITY FIX: Return generic error for auth failures to prevent enumeration
       console.error("Auth creation error:", authError.message)
-      return NextResponse.json({ error: "Failed to create user account. Email might already be in use." }, { status: 400 })
+      return NextResponse.json({ error: "Unable to create user account. Please verify the details." }, { status: 400 })
     }
 
     if (authData.user) {
@@ -102,8 +102,7 @@ export async function POST(request: NextRequest) {
         await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
         
         console.error("DB User insert error:", userError.message)
-        // SECURITY FIX: Generic error message
-        return NextResponse.json({ error: "Failed to create user profile." }, { status: 500 })
+        return NextResponse.json({ error: "Unable to create user account. Please verify the details." }, { status: 500 })
       }
 
       // 5. Create role-specific profile
@@ -140,7 +139,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error("Create user error:", error)
-    // SECURITY FIX: Generic error message
     return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 })
   }
 }

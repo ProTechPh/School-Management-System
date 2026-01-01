@@ -4,6 +4,13 @@ import crypto from "crypto"
 
 export async function POST(request: Request) {
   try {
+    const secret = process.env.QR_SECRET
+    if (!secret) {
+      console.error("QR_SECRET is not configured")
+      // SECURITY FIX: Generic error to prevent leaking config status
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -27,7 +34,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Session ID required" }, { status: 400 })
     }
 
-    // SECURITY FIX: IDOR Prevention
     // Verify that the session belongs to the requesting teacher (if they are a teacher)
     const { data: session } = await supabase
       .from("qr_attendance_sessions")
@@ -45,12 +51,6 @@ export async function POST(request: Request) {
     }
 
     const timestamp = Date.now()
-    
-    const secret = process.env.QR_SECRET
-    if (!secret) {
-      console.error("QR_SECRET is not configured")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
-    }
     
     // Create HMAC signature
     const payload = `${sessionId}:${timestamp}`

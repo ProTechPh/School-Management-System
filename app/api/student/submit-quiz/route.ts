@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // SECURITY FIX: Robust Server-Side Heuristics (Issue 3)
+    // 5. Robust Server-Side Heuristics
     // Calculate "Impossible Speed"
     // Increased to 5000ms (5 seconds) per question as a more realistic minimum threshold.
     const minTimePerQuestionMs = 5000 
@@ -106,12 +106,11 @@ export async function POST(request: Request) {
     const clientExitAttempts = typeof activityLog?.exitAttempts === 'number' ? Math.max(0, activityLog.exitAttempts) : 0
 
     // Combine Flags: Prioritize server-side detection
-    // isFlagged will be true if speed is impossible, regardless of client metrics
-    const isFlagged = isTooFast || 
-                      clientTabSwitches > 10 || 
-                      clientCopyPaste > 5
+    // isFlagged will be true ONLY if speed is impossible. 
+    // We ignore client metrics for automatic flagging to prevent bypass.
+    const isFlagged = isTooFast
 
-    // 5. Grade Answers
+    // 6. Grade Answers
     let totalScore = 0
     let maxScore = 0
     let hasEssayQuestions = false
@@ -157,12 +156,12 @@ export async function POST(request: Request) {
       })
     }
 
-    // 6. Save Graded Answers
+    // 7. Save Graded Answers
     if (gradedAnswers.length > 0) {
       await supabase.from("quiz_attempt_answers").insert(gradedAnswers)
     }
 
-    // 7. Update Attempt
+    // 8. Update Attempt
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
     
     await supabase
@@ -179,7 +178,7 @@ export async function POST(request: Request) {
       })
       .eq("id", attempt.id)
 
-    // SECURITY FIX: Do not reveal flagging status to client to prevent probing
+    // Do not reveal flagging status to client to prevent probing
     return NextResponse.json({
       success: true,
       score: totalScore,

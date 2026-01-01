@@ -47,7 +47,7 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export async function POST(request: Request) {
   try {
-    // SECURITY FIX: Add Rate Limiting (Issue 2)
+    // Rate Limiting
     const ip = request.headers.get("x-forwarded-for") || "unknown"
     const isAllowed = await checkRateLimit(ip, "check-in", 10, 60 * 1000)
     
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     const secret = process.env.QR_SECRET
     if (!secret) {
       console.error("QR_SECRET is not configured")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 
     // Verify HMAC signature
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     }
 
     // Check if QR code is expired (Strict 5s window)
-    // This physical proximity constraint is our primary defense against remote check-ins
+    // This physical proximity constraint is our primary defense against remote check-ins (replay attacks)
     const now = Date.now()
     const qrAge = now - timestamp
     
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 5. SECURITY FIX: Robust Location Verification (Issue 1)
+    // 5. Location Verification
     if (session.require_location) {
       let locationVerified = false;
 
@@ -178,7 +178,9 @@ export async function POST(request: Request) {
       }
 
       // 5b. GPS Check (Secondary / Advisory)
-      // Only check GPS if IP verification wasn't performed (i.e., env var not set)
+      // Only used if SCHOOL_IP_ADDRESS is NOT set.
+      // We accept GPS here, but since it can be spoofed, the primary security
+      // comes from the 5-second QR code rotation verified above.
       if (!locationVerified) {
         if (!latitude || !longitude) {
           return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })
@@ -200,9 +202,6 @@ export async function POST(request: Request) {
             error: `You are too far from school (${Math.round(distance)}m). Must be within ${radius}m.` 
           }, { status: 403 })
         }
-        
-        // Note: We accept GPS here, but since it can be spoofed, the primary security
-        // comes from the 5-second QR code rotation verified above.
       }
     }
 
