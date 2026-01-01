@@ -66,40 +66,22 @@ export default function StudentLessonsPage() {
     if (!user) return
     setUserId(user.id)
 
-    // Get student's enrolled classes
-    const { data: enrollments } = await supabase
-      .from("class_students")
-      .select("class_id")
-      .eq("student_id", user.id)
-
-    if (enrollments && enrollments.length > 0) {
-      const classIds = enrollments.map(e => e.class_id)
-
-      const { data: lessonData } = await supabase
-        .from("lessons")
-        .select(`
-          id, title, description, content,
-          class:classes (name),
-          teacher:users!lessons_teacher_id_fkey (name),
-          materials:lesson_materials (id, name, type, url, size)
-        `)
-        .in("class_id", classIds)
-        .order("created_at", { ascending: false })
-
-      if (lessonData) {
-        setLessons(lessonData.map(l => ({
-          id: l.id,
-          title: l.title,
-          description: l.description,
-          content: l.content,
-          class_name: (l.class as any)?.name || "Unknown",
-          teacher_name: (l.teacher as any)?.name || null,
-          materials: (l.materials as any) || [],
-        })))
+    // SECURITY FIX: Use secure API route instead of direct DB query
+    try {
+      const response = await fetch("/api/student/lessons")
+      if (!response.ok) {
+        throw new Error("Failed to fetch lessons")
       }
+      
+      const data = await response.json()
+      setLessons(data.lessons)
+      
+    } catch (error) {
+      console.error("Error fetching lessons:", error)
+      toast.error("Failed to load lessons")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const handleMaterialClick = async (material: Material, e: React.MouseEvent) => {
