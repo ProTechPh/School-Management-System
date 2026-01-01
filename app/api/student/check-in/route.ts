@@ -135,21 +135,24 @@ export async function POST(request: Request) {
     // 5. SECURITY FIX: Robust Location Verification (IP Priority)
     if (session.require_location) {
       // 5a. IP Check (Strict Enforcement)
-      // This is the primary defense against GPS spoofing.
-      // If SCHOOL_IP_ADDRESS is configured, we trust it over the client-provided GPS.
       const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
       
       if (allowedIps) {
-        const forwardedFor = request.headers.get("x-forwarded-for")
+        // SECURITY FIX: Prioritize x-real-ip (platform set) over x-forwarded-for (client modifiable)
+        // If x-real-ip is missing, we check x-forwarded-for but take the LAST IP (if trusting platform append)
+        // or just default to unknown to fail safe.
         const realIp = request.headers.get("x-real-ip")
-        
         let clientIp = "unknown"
-        
-        if (forwardedFor) {
-          const ips = forwardedFor.split(',').map(ip => ip.trim())
-          clientIp = ips[0] // First IP is the client
-        } else if (realIp) {
+
+        if (realIp) {
           clientIp = realIp
+        } else {
+          // Fallback for dev environments or non-standard proxies
+          const forwardedFor = request.headers.get("x-forwarded-for")
+          if (forwardedFor) {
+            // Take the first one, but strictly validation is better with x-real-ip in prod
+            clientIp = forwardedFor.split(',')[0].trim()
+          }
         }
         
         const allowedList = allowedIps.split(',').map(ip => ip.trim())
@@ -168,7 +171,6 @@ export async function POST(request: Request) {
       }
 
       // 5b. GPS Check (Secondary / Fallback)
-      // We still perform this check, but it's secondary to the IP check if configured.
       if (!latitude || !longitude) {
         return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })
       }

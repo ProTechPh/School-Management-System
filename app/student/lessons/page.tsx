@@ -6,7 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { FileText, Video, LinkIcon, Download, Play, ExternalLink, File, BookOpen, Loader2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { FileText, Video, LinkIcon, Download, Play, ExternalLink, File, BookOpen, Loader2, AlertTriangle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 
@@ -41,6 +51,9 @@ export default function StudentLessonsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
   const [userId, setUserId] = useState("")
+  
+  // SECURITY FIX: State for external link warning
+  const [externalUrl, setExternalUrl] = useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -95,7 +108,8 @@ export default function StudentLessonsPage() {
     // 1. Check if it's an external link
     const safeUrl = getSafeUrl(material.url)
     if (safeUrl) {
-      window.open(safeUrl, "_blank")
+      // SECURITY FIX: Show warning instead of opening immediately
+      setExternalUrl(safeUrl)
       return
     }
 
@@ -125,6 +139,13 @@ export default function StudentLessonsPage() {
       console.error("Access error:", error)
       if (newWindow) newWindow.close()
       toast.error("Unable to open material. You may not have access.")
+    }
+  }
+
+  const confirmExternalNavigation = () => {
+    if (externalUrl) {
+      window.open(externalUrl, "_blank")
+      setExternalUrl(null)
     }
   }
 
@@ -218,6 +239,31 @@ export default function StudentLessonsPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* SECURITY FIX: External Link Warning Dialog */}
+        <AlertDialog open={!!externalUrl} onOpenChange={() => setExternalUrl(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <AlertDialogTitle>External Link Warning</AlertDialogTitle>
+              </div>
+              <AlertDialogDescription>
+                You are about to leave the school platform and visit an external website:
+                <br /><br />
+                <span className="font-mono bg-muted p-1 rounded text-xs break-all">{externalUrl}</span>
+                <br /><br />
+                Please do not enter your school password or personal information on the target site.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmExternalNavigation}>
+                Continue to Site
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {lessons.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

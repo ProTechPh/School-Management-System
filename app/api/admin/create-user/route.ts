@@ -51,6 +51,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { email, password, name, role, lrn } = body
 
+    // SECURITY FIX: Enforce Password Complexity
+    const hasMinLength = password && password.length >= 8
+    const hasNumber = /\d/.test(password)
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password)
+
+    if (!hasMinLength || !hasNumber || !hasSpecial) {
+      return NextResponse.json({ 
+        error: "Password is too weak. Must be at least 8 characters long and contain a number and a special character." 
+      }, { status: 400 })
+    }
+
     // 3. Create user using Service Role (Admin) client
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
