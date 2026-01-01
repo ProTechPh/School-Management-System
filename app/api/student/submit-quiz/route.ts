@@ -1,23 +1,21 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { getClientIp } from "@/lib/security"
 
 export async function POST(request: Request) {
   try {
-    // Rate Limiting with secure IP
-    const ip = getClientIp(request)
-    const isAllowed = await checkRateLimit(ip, "submit-quiz", 3, 60 * 1000)
-    
-    if (!isAllowed) {
-      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
-    }
-
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Rate Limiting by User ID
+    const isAllowed = await checkRateLimit(user.id, "submit-quiz", 3, 60 * 1000)
+    
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
     }
 
     const body = await request.json()
@@ -108,7 +106,8 @@ export async function POST(request: Request) {
 
     // Combine Flags: Prioritize server-side detection
     // isFlagged will be true ONLY if speed is impossible. 
-    // We ignore client metrics for automatic flagging to prevent bypass.
+    // SECURITY FIX: We ignore client metrics for automatic flagging to prevent bypass.
+    // Client metrics are saved for advisory review only.
     const isFlagged = isTooFast
 
     // 6. Grade Answers
@@ -171,7 +170,7 @@ export async function POST(request: Request) {
         score: totalScore,
         max_score: maxScore,
         percentage: percentage,
-        needs_grading: hasEssayQuestions || isFlagged, // Auto-flag for review if suspicious
+        needs_grading: hasEssayQuestions || isFlagged, // Auto-flag for review if suspicious speed
         completed_at: new Date().toISOString(),
         tab_switches: clientTabSwitches,
         copy_paste_count: clientCopyPaste,

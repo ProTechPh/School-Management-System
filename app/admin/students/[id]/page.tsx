@@ -46,7 +46,6 @@ import {
   X
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
 import { StudentForm, type StudentFormData } from "@/components/student-form"
@@ -251,7 +250,6 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     if (!selectedAccountId || !student?.profile) return
     setLinking(true)
 
-    // SECURITY FIX: Use secure API route for account linking
     try {
       const response = await fetch("/api/admin/link-account", {
         method: "POST",
@@ -289,42 +287,38 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setUserId(user.id)
 
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("id, name, email, avatar, address")
-      .eq("id", id)
-      .single()
-
-    if (userError || !userData) {
-      setLoading(false)
-      return
-    }
-
-    const { data: profileData } = await supabase
-      .from("student_profiles")
-      .select("*")
-      .eq("id", id)
-      .single()
-
-    let hasAuth = false
+    // SECURITY FIX: Use secure API route instead of direct DB query
     try {
-      const res = await fetch("/api/check-auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: id })
-      })
-      const { hasAuth: authResult } = await res.json()
-      hasAuth = authResult
-    } catch {
-      hasAuth = false
-    }
+      const response = await fetch(`/api/admin/students/${id}`)
+      if (!response.ok) {
+        throw new Error("Failed to fetch student details")
+      }
+      
+      const { student: studentData } = await response.json()
 
-    setStudent({
-      ...userData,
-      profile: profileData as DbStudentProfile | null,
-      hasAuthAccount: hasAuth
-    })
-    setLoading(false)
+      let hasAuth = false
+      try {
+        const res = await fetch("/api/check-auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: id })
+        })
+        const { hasAuth: authResult } = await res.json()
+        hasAuth = authResult
+      } catch {
+        hasAuth = false
+      }
+
+      setStudent({
+        ...studentData,
+        hasAuthAccount: hasAuth
+      })
+    } catch (error: any) {
+      console.error("Error fetching student:", error)
+      toast.error("Error loading student details")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSaveEdit = async (formData: StudentFormData) => {

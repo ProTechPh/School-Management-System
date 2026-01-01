@@ -1,5 +1,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { z } from "zod"
+
+// Schema validation
+const settingsSchema = z.object({
+  name: z.string().min(1).max(100),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  radiusMeters: z.number().min(10).max(5000), // Enforce reasonable bounds
+})
 
 export async function POST(request: Request) {
   try {
@@ -21,7 +30,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { name, latitude, longitude, radiusMeters } = body
+    
+    // Validate input
+    const validation = settingsSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json({ 
+        error: "Invalid settings: " + validation.error.errors.map(e => e.message).join(", ") 
+      }, { status: 400 })
+    }
+
+    const { name, latitude, longitude, radiusMeters } = validation.data
 
     const { error } = await supabase
       .from("school_settings")

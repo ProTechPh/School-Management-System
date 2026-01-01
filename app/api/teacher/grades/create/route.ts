@@ -2,23 +2,21 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { percentageToPhGrade } from "@/lib/grade-utils"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { getClientIp } from "@/lib/security"
 
 export async function POST(request: Request) {
   try {
-    // 1. Rate Limiting with secure IP
-    const ip = getClientIp(request)
-    const isAllowed = await checkRateLimit(ip, "create-grade", 20, 60 * 1000) // Allow 20 grades/min
-    
-    if (!isAllowed) {
-      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
-    }
-
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // 1. Rate Limiting by User ID (Prevent shared IP blocking)
+    const isAllowed = await checkRateLimit(user.id, "create-grade", 20, 60 * 1000) // Allow 20 grades/min per teacher
+    
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
     }
 
     // 2. Verify Teacher Role

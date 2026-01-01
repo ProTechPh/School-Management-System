@@ -13,6 +13,13 @@ const supabaseAdmin = createClient(
   }
 )
 
+/**
+ * Rate limits requests based on an identifier (IP or User ID).
+ * @param identifier - The unique key to rate limit against (e.g., User ID or IP)
+ * @param endpoint - The action being performed (e.g., 'login', 'submit-quiz')
+ * @param limit - Max requests allowed in the window
+ * @param windowMs - Time window in milliseconds
+ */
 export async function checkRateLimit(identifier: string, endpoint: string, limit: number, windowMs: number): Promise<boolean> {
   const key = `${identifier}:${endpoint}`
   

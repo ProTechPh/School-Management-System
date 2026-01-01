@@ -37,7 +37,7 @@ export function validateOrigin(request: NextRequest | Request): boolean {
 
 /**
  * Securely extracts the client IP address.
- * Prevents spoofing by prioritizing x-real-ip or using the last address in x-forwarded-for.
+ * Prevents spoofing by prioritizing x-real-ip or using the FIRST address in x-forwarded-for.
  */
 export function getClientIp(request: NextRequest | Request): string {
   // 1. Try x-real-ip first (often set by trusted reverse proxies like Vercel/AWS)
@@ -47,11 +47,11 @@ export function getClientIp(request: NextRequest | Request): string {
   // 2. Fallback to x-forwarded-for
   const forwardedFor = request.headers.get("x-forwarded-for")
   if (forwardedFor) {
-    // Security Fix: Use the LAST IP in the list.
-    // When a client sends a spoofed "X-Forwarded-For: fake-ip", the load balancer 
-    // appends the real IP to the end: "fake-ip, real-ip".
+    // Security Fix: Use the FIRST IP in the list.
+    // In standard proxy chains, the first IP is the original client IP.
+    // Appending false IPs to the end is a common spoofing technique.
     const ips = forwardedFor.split(',').map(ip => ip.trim())
-    return ips[ips.length - 1]
+    return ips[0]
   }
 
   return "unknown"
