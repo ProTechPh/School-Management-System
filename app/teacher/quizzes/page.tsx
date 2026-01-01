@@ -1,4 +1,40 @@
-<div className="min-h-screen">
+toast.success("Quiz reopened for student")
+    fetchData()
+  }
+
+  const handleRemoveReopenEntry = async (quizId: string, studentId: string) => {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("quiz_reopens")
+      .delete()
+      .eq("quiz_id", quizId)
+      .eq("student_id", studentId)
+    
+    if (error) {
+      toast.error("Failed to remove reopen entry", { description: error.message })
+      return
+    }
+    toast.success("Reopen entry removed")
+    fetchData()
+  }
+
+  const isQuizExpired = (quiz: Quiz) => {
+    return quiz.due_date ? new Date(quiz.due_date) < new Date() : false
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <DashboardHeader title="Quizzes" subtitle="Create and manage quizzes" />
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen">
       <DashboardHeader title="Quizzes" subtitle="Create and manage quizzes" userId={userId} />
       <div className="p-4 lg:p-6">
         <div className="mb-6 flex items-center justify-between">
