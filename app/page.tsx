@@ -19,7 +19,6 @@ import {
   ArrowRight,
   Sparkles
 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 
 export default function HomePage() {
   const router = useRouter()
@@ -27,22 +26,22 @@ export default function HomePage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (user) {
-        const { data: userData } = await supabase
-          .from("users")
-          .select("role")
-          .eq("id", user.id)
-          .single()
-
-        if (userData?.role) {
-          router.push(`/${userData.role}`)
-          return
+      try {
+        // Use secure API route instead of direct DB query
+        const response = await fetch("/api/auth/me")
+        
+        if (response.ok) {
+          const { user: userData } = await response.json()
+          if (userData?.role) {
+            router.push(`/${userData.role}`)
+            return
+          }
         }
+      } catch (error) {
+        // Ignore errors, user is likely not logged in
+      } finally {
+        setChecking(false)
       }
-      setChecking(false)
     }
 
     checkAuth()

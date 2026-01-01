@@ -12,8 +12,8 @@ export async function POST(request: Request) {
     }
 
     const { path } = await request.json()
-    if (!path) {
-      return NextResponse.json({ error: "Path required" }, { status: 400 })
+    if (!path || typeof path !== "string") {
+      return NextResponse.json({ error: "Valid path required" }, { status: 400 })
     }
 
     // 1. Find the material record associated with this path
@@ -39,7 +39,20 @@ export async function POST(request: Request) {
     const classId = lesson.class_id
     const teacherId = lesson.class.teacher_id
 
-    // 2. Check Authorization
+    // 2. SECURITY FIX: Path Traversal & Scope Validation
+    // Ensure path doesn't contain traversal characters
+    if (path.includes("..")) {
+      return NextResponse.json({ error: "Invalid path format" }, { status: 400 })
+    }
+
+    // Enforce that the file resides in the teacher's directory
+    // This prevents a teacher from pointing a material to 'admin/secret.pdf'
+    // We assume files are uploaded to 'teacher_id/filename'
+    if (!path.startsWith(`${teacherId}/`)) {
+       return NextResponse.json({ error: "Security Violation: File path mismatch" }, { status: 403 })
+    }
+
+    // 3. Check Authorization
     let isAuthorized = false
 
     // Check if user is the teacher of the class
@@ -77,8 +90,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden: You do not have access to this material" }, { status: 403 })
     }
 
-    // 3. Generate Signed URL using Admin Client
-    // This allows strict RLS on the bucket (deny all) while allowing this API to grant access
+    // 4. Generate Signed URL using Admin Client
     const supabaseAdmin = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
