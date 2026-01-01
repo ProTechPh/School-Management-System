@@ -37,7 +37,10 @@ export const profileUpdateSchema = z.object({
   name: z.string().min(2).max(100).regex(/^[a-zA-Z0-9\s\.\-]+$/, "Name contains invalid characters").refine(val => !val.toLowerCase().includes("admin"), "Invalid name").optional(),
   phone: z.string().max(20).optional().nullable(),
   address: z.string().max(200).optional().nullable(),
-  avatar: z.string().max(500).optional().nullable(), // URL
+  // SECURITY FIX: Prevent Stored XSS by enforcing valid URL protocol
+  avatar: z.string().url().max(500).refine((val) => val.startsWith("http://") || val.startsWith("https://"), {
+    message: "Avatar URL must start with http:// or https://"
+  }).optional().nullable(),
 
   // Student Fields
   contact_number: z.string().max(20).optional().nullable(),

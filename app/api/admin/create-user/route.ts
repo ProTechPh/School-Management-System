@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import { validateOrigin } from "@/lib/security"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   // SECURITY FIX: CSRF Check
@@ -11,6 +12,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // SECURITY FIX: Rate Limiting
+    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // Limit admins to creating 10 users per minute to prevent abuse/spam
+    const isAllowed = await checkRateLimit(ip, "create-user", 10, 60 * 1000)
+    
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
+    }
+
     // 1. Verify the caller is an admin
     const cookieStore = await cookies()
     const supabaseAuth = createServerClient(

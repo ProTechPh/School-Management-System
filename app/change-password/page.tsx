@@ -7,11 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { GraduationCap, Loader2, Eye, EyeOff, KeyRound, Check, X } from "lucide-react"
+import { Loader2, Eye, EyeOff, KeyRound, Check, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 export default function ChangePasswordPage() {
   const router = useRouter()
+  const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -19,6 +20,7 @@ export default function ChangePasswordPage() {
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState("")
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   // Password requirements
   const hasMinLength = newPassword.length >= 8
@@ -39,6 +41,8 @@ export default function ChangePasswordPage() {
       return
     }
 
+    setUserEmail(user.email || null)
+
     // Get user data
     const { data: userData } = await supabase
       .from("users")
@@ -46,13 +50,13 @@ export default function ChangePasswordPage() {
       .eq("id", user.id)
       .single()
 
-    if (!userData?.must_change_password) {
-      // User doesn't need to change password, redirect to dashboard
-      router.push(`/${userData?.role || ""}`)
-      return
-    }
-
-    setUserRole(userData.role)
+    // If user doesn't strictly need to change password (forced flow), 
+    // they can still access this page manually to change it voluntarily.
+    // We only redirect away if they are here by accident or logic error, 
+    // but allowing voluntary changes is good.
+    // However, the prompt implies this page handles both.
+    
+    setUserRole(userData?.role || null)
     setChecking(false)
   }
 
@@ -71,8 +75,25 @@ export default function ChangePasswordPage() {
       return
     }
 
+    if (!userEmail) {
+      setError("User session invalid. Please login again.")
+      return
+    }
+
     setLoading(true)
     const supabase = createClient()
+
+    // SECURITY FIX: Verify old password first
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: userEmail,
+      password: currentPassword
+    })
+
+    if (signInError) {
+      setError("Current password is incorrect.")
+      setLoading(false)
+      return
+    }
 
     // Update password in Supabase Auth
     const { error: authError } = await supabase.auth.updateUser({
@@ -85,7 +106,7 @@ export default function ChangePasswordPage() {
       return
     }
 
-    // Get current user
+    // Get current user to update DB flag
     const { data: { user } } = await supabase.auth.getUser()
     
     if (user) {
@@ -125,11 +146,25 @@ export default function ChangePasswordPage() {
           </div>
           <CardTitle className="text-2xl">Change Your Password</CardTitle>
           <CardDescription>
-            For security, you must create a strong password.
+            For security, please enter your current password and create a new strong password.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleChangePassword} className="space-y-4">
+            
+            {/* SECURITY FIX: Current Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword">Current Password</Label>
+              <Input
+                id="currentPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="newPassword">New Password</Label>
               <div className="relative">
@@ -196,12 +231,12 @@ export default function ChangePasswordPage() {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={loading || !hasMinLength || !hasNumber || !isMatch}
+              disabled={loading || !currentPassword || !hasMinLength || !hasNumber || !isMatch}
             >
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Changing Password...
+                  Updating...
                 </>
               ) : (
                 "Change Password"
