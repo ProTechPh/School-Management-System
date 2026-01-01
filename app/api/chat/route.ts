@@ -3,6 +3,7 @@ import { consumeStream, convertToModelMessages, streamText, type UIMessage } fro
 import { createClient } from "@/lib/supabase/server"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { NextResponse } from "next/server"
+import { getClientIp } from "@/lib/security"
 
 export const maxDuration = 30
 
@@ -15,8 +16,8 @@ const provider = createOpenAICompatible({
 })
 
 export async function POST(req: Request) {
-  // SECURITY FIX: Rate Limiting
-  const ip = req.headers.get("x-forwarded-for") || "unknown"
+  // SECURITY FIX: Rate Limiting with secure IP
+  const ip = getClientIp(req)
   const isAllowed = await checkRateLimit(ip, "chat", 10, 60 * 1000)
   
   if (!isAllowed) {

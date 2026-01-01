@@ -2,11 +2,12 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { percentageToPhGrade } from "@/lib/grade-utils"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function POST(request: Request) {
   try {
-    // 1. Rate Limiting
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // 1. Rate Limiting with secure IP
+    const ip = getClientIp(request)
     const isAllowed = await checkRateLimit(ip, "create-grade", 20, 60 * 1000) // Allow 20 grades/min
     
     if (!isAllowed) {

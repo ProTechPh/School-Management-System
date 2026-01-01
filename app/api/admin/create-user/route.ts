@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
-import { validateOrigin } from "@/lib/security"
+import { validateOrigin, getClientIp } from "@/lib/security"
 import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
@@ -12,8 +12,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Rate Limiting
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // Rate Limiting with secure IP
+    const ip = getClientIp(request)
     const isAllowed = await checkRateLimit(ip, "create-user", 10, 60 * 1000)
     
     if (!isAllowed) {

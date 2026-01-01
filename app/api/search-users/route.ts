@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function GET(request: Request) {
   try {
-    // 1. Strict Rate Limiting (5 requests per minute)
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // 1. Strict Rate Limiting (5 requests per minute) with secure IP
+    const ip = getClientIp(request)
     const isAllowed = await checkRateLimit(ip, "search-users", 5, 60 * 1000)
     
     if (!isAllowed) {
@@ -74,11 +75,6 @@ export async function GET(request: Request) {
         
         enrolledStudentIds = enrollments?.map(e => e.student_id) || []
       }
-
-      // Build query: (role in (teacher, admin)) OR (id in enrolledStudentIds AND role = student)
-      // Note: Supabase OR syntax is tricky with mixed AND/OR logic in one query builder string.
-      // Simpler approach: Fetch potentially matching users and filter in memory (for small result sets) 
-      // OR use two queries. Since we limit to 10, two queries is cleaner and safer.
 
       // Query 1: Teachers/Admins
       const { data: staff } = await supabase

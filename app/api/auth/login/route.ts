@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function POST(request: Request) {
   try {
-    // Get IP address for rate limiting
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // SECURITY FIX: Use secure IP extraction
+    const ip = getClientIp(request)
     
     // Check rate limit (5 attempts per minute)
     const isAllowed = await checkRateLimit(ip, "login", 5, 60 * 1000)

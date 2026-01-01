@@ -2,11 +2,12 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function POST(request: Request) {
   try {
-    // SECURITY FIX: Rate Limiting
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
+    // SECURITY FIX: Rate Limiting with secure IP
+    const ip = getClientIp(request)
     const isAllowed = await checkRateLimit(ip, "start-quiz", 5, 60 * 1000)
     
     if (!isAllowed) {
