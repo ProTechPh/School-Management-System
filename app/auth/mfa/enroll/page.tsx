@@ -1,37 +1,50 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { AlertCircle, CheckCircle2, Loader2, Shield, Lock } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2, Shield, Lock, Copy } from "lucide-react"
 import { toast } from "sonner"
+import QRCodeStyling from "qr-code-styling"
 
 export default function MFAEnrollPage() {
   const [step, setStep] = useState<"verify" | "enroll">("verify")
   const [password, setPassword] = useState("")
   const [qrCode, setQrCode] = useState<string>("")
+  const [secretKey, setSecretKey] = useState<string>("")
+  const [totpUri, setTotpUri] = useState<string>("")
   const [factorId, setFactorId] = useState<string>("")
   const [verifyCode, setVerifyCode] = useState("")
   const [loading, setLoading] = useState(true)
   const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState("")
   const [userEmail, setUserEmail] = useState("")
+  const qrRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => {
-    const getUser = async () => {
+    const checkUserAndFactors = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user?.email) {
         setUserEmail(user.email)
       }
+      
+      // Check if user already has verified MFA factor
+      const { data: factors } = await supabase.auth.mfa.listFactors()
+      if (factors && factors.totp.length > 0 && factors.totp[0].status === 'verified') {
+        // Already enrolled, redirect to admin
+        window.location.href = "/admin"
+        return
+      }
+      
       setLoading(false)
     }
-    getUser()
+    checkUserAndFactors()
   }, [])
 
   const handlePasswordVerify = async (e: React.FormEvent) => {
@@ -58,18 +71,56 @@ export default function MFAEnrollPage() {
   const startEnrollment = async () => {
     try {
       const { data, error } = await supabase.auth.mfa.enroll({
-        factorType: 'totp'
+        factorType: 'totp',
+        issuer: 'LessonGo'
       })
 
       if (error) throw error
 
+      // Log the secret key for manual entry in Google Authenticator
+      console.log("=== MFA SETUP INFO ===")
+      console.log("Factor ID:", data.id)
+      console.log("Secret Key (for manual entry):", data.totp.secret)
+      console.log("QR Code URI:", data.totp.uri)
+      console.log("======================")
+
       setFactorId(data.id)
+      setSecretKey(data.totp.secret)
+      setTotpUri(data.totp.uri)
       setQrCode(data.totp.qr_code)
     } catch (err: any) {
       setError(err.message)
     } finally {
       setVerifying(false)
     }
+  }
+
+  // Generate QR code using qr-code-styling library
+  useEffect(() => {
+    if (totpUri && qrRef.current) {
+      qrRef.current.innerHTML = ""
+      const qrCode = new QRCodeStyling({
+        width: 200,
+        height: 200,
+        data: totpUri,
+        dotsOptions: {
+          color: "#000",
+          type: "rounded"
+        },
+        backgroundOptions: {
+          color: "#fff"
+        },
+        cornersSquareOptions: {
+          type: "extra-rounded"
+        }
+      })
+      qrCode.append(qrRef.current)
+    }
+  }, [totpUri])
+
+  const copySecretKey = () => {
+    navigator.clipboard.writeText(secretKey)
+    toast.success("Secret key copied!")
   }
 
   const handleMfaVerify = async (e: React.FormEvent) => {
@@ -86,7 +137,9 @@ export default function MFAEnrollPage() {
       if (error) throw error
 
       toast.success("MFA Enabled Successfully")
-      router.push("/admin")
+      
+      // Force a full page reload to refresh the session with AAL2
+      window.location.href = "/admin"
     } catch (err: any) {
       setError(err.message)
       setVerifying(false)
@@ -150,10 +203,22 @@ export default function MFAEnrollPage() {
           ) : (
             <div className="space-y-6">
               <div className="flex justify-center">
-                {qrCode && (
-                  <img src={qrCode} alt="QR Code" className="border-4 border-white shadow-sm rounded-lg" />
-                )}
+                <div ref={qrRef} className="border-4 border-white shadow-sm rounded-lg p-2 bg-white" />
               </div>
+              
+              {secretKey && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Or enter this key manually:</Label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-muted px-3 py-2 rounded text-xs font-mono break-all">
+                      {secretKey}
+                    </code>
+                    <Button variant="outline" size="icon" onClick={copySecretKey}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
               
               <div className="text-sm text-muted-foreground text-center">
                 Use Google Authenticator or Authy to scan the code above.

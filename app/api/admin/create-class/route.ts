@@ -107,6 +107,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, class: newClass })
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Create class error:", error)
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 })
   }
 }

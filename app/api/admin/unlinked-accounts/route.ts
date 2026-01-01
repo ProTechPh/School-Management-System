@@ -31,9 +31,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ accounts: unlinkedStudents || [] })
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Fetch unlinked accounts error:", error)
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 })
   }
 }
+
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Fallback logic in case RPC is not deployed yet
 async function legacyFetch(supabase: any) {
@@ -42,7 +46,10 @@ async function legacyFetch(supabase: any) {
     .from("student_profiles")
     .select("id")
   
-  const linkedIds = profiles?.map((p: any) => p.id) || []
+  // Validate all IDs are proper UUIDs to prevent injection
+  const linkedIds = (profiles?.map((p: any) => p.id) || []).filter(
+    (id: string) => UUID_REGEX.test(id)
+  )
 
   // If list is too big, just return empty to prevent crash
   if (linkedIds.length > 1000) {

@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, announcement: data })
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Create announcement error:", error)
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 })
   }
 }

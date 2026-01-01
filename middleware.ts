@@ -99,27 +99,23 @@ export async function middleware(request: NextRequest) {
     }
 
     // SECURITY FIX: Enforce MFA for Admin Routes
-    // Check if user is admin and trying to access admin routes
-    if (userData?.role === "admin" && request.nextUrl.pathname.startsWith("/admin")) {
-      const { data: { session } } = await supabase.auth.getSession()
+    // Check if user is admin and trying to access admin routes (not MFA pages)
+    const isMfaPage = request.nextUrl.pathname.startsWith("/auth/mfa")
+    
+    if (userData?.role === "admin" && request.nextUrl.pathname.startsWith("/admin") && !isMfaPage) {
+      // Get the authenticator assurance level
+      const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
       
-      // Check if session is AAL2 (MFA verified)
-      // Note: This requires MFA to be enrolled. If not enrolled, we should force enrollment or block.
-      // For now, we'll check the level. If 'aal1', redirect to verification.
-      if (session && session.user.app_metadata.aal !== 'aal2') {
+      if (aalData?.currentLevel !== 'aal2') {
          // Check if user has enrolled factors
          const { data: factors } = await supabase.auth.mfa.listFactors()
          
-         if (factors && factors.totp.length > 0) {
-            // Has factors but not verified in this session -> Redirect to verify
-            if (!request.nextUrl.pathname.startsWith("/auth/mfa/verify")) {
-               return NextResponse.redirect(new URL("/auth/mfa/verify", request.url))
-            }
+         if (factors && factors.totp.length > 0 && factors.totp[0].status === 'verified') {
+            // Has verified factors but not AAL2 in this session -> Redirect to verify
+            return NextResponse.redirect(new URL("/auth/mfa/verify", request.url))
          } else {
-            // No factors enrolled -> Force enrollment
-            if (!request.nextUrl.pathname.startsWith("/auth/mfa/enroll")) {
-               return NextResponse.redirect(new URL("/auth/mfa/enroll", request.url))
-            }
+            // No verified factors -> Force enrollment
+            return NextResponse.redirect(new URL("/auth/mfa/enroll", request.url))
          }
       }
     }

@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Admins can insert users" ON users; CREATE POLICY "Admins can insert users" ON users FOR INSERT TO authenticated WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');;

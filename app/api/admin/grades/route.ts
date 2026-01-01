@@ -51,6 +51,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ grades: safeGrades })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("Fetch grades error:", error)
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 })
   }
 }

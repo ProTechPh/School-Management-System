@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Admins can insert student profiles" ON student_profiles; CREATE POLICY "Admins can insert student profiles" ON student_profiles FOR INSERT TO authenticated WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');;
