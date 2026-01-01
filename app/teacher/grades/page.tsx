@@ -108,8 +108,7 @@ export default function TeacherGradesPage() {
 
   useEffect(() => {
     if (selectedClass) {
-      fetchClassStudents()
-      fetchClassGrades()
+      fetchClassData(selectedClass)
     }
   }, [selectedClass])
 
@@ -121,6 +120,8 @@ export default function TeacherGradesPage() {
     setUserId(user.id)
 
     // Fetch teacher's classes
+    // This query is safe as RLS should restrict to teacher's classes anyway,
+    // but migrating it to API is better for consistency. For now, we focus on the sensitive grade data.
     const { data: classes } = await supabase
       .from("classes")
       .select("id, name, grade, section, subject")
@@ -130,70 +131,36 @@ export default function TeacherGradesPage() {
     if (classes && classes.length > 0) {
       setTeacherClasses(classes)
       setSelectedClass(classes[0].id)
-    }
-    setLoading(false)
-  }
-
-  const fetchClassStudents = async () => {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from("class_students")
-      .select(`
-        student:users!class_students_student_id_fkey (id, name, email, avatar)
-      `)
-      .eq("class_id", selectedClass)
-
-    if (data) {
-      setClassStudents(data.map(d => d.student as unknown as StudentData))
+    } else {
+      setLoading(false)
     }
   }
 
-  const fetchClassGrades = async () => {
-    const supabase = createClient()
-    
-    // Fetch regular grades
-    const { data: grades } = await supabase
-      .from("grades")
-      .select("*")
-      .eq("class_id", selectedClass)
-
-    // Fetch quiz attempts for this class
-    const { data: quizAttempts } = await supabase
-      .from("quiz_attempts")
-      .select(`
-        *,
-        quiz:quizzes!inner (class_id)
-      `)
-      .eq("quiz.class_id", selectedClass)
-
-    const allGrades: GradeData[] = grades || []
-
-    // Convert quiz attempts to grade format
-    if (quizAttempts) {
-      quizAttempts.forEach(attempt => {
-        // Avoid duplicates
-        const exists = allGrades.some(g => 
-          g.type === "quiz" && 
-          g.student_id === attempt.student_id && 
-          g.date === attempt.completed_at
-        )
-        if (!exists) {
-          allGrades.push({
-            id: `quiz-${attempt.id}`,
-            student_id: attempt.student_id,
-            class_id: selectedClass,
-            score: attempt.score,
-            max_score: attempt.max_score,
-            percentage: attempt.percentage,
-            grade: percentageToPhGrade(attempt.percentage),
-            type: "quiz",
-            date: attempt.completed_at,
-          })
+  const fetchClassData = async (classId: string) => {
+    // SECURITY FIX: Use secure API route instead of direct client queries
+    try {
+      const response = await fetch(`/api/teacher/grades/class/${classId}`)
+      
+      if (!response.ok) {
+        if (response.status === 403) {
+          toast.error("You do not have permission to view this class")
+        } else {
+          throw new Error("Failed to fetch class data")
         }
-      })
-    }
+        return
+      }
 
-    setClassGrades(allGrades)
+      const data = await response.json()
+      
+      setClassStudents(data.students)
+      setClassGrades(data.grades)
+      
+    } catch (error) {
+      console.error("Error fetching class data:", error)
+      toast.error("Failed to load grades")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleAddGrade = async () => {
@@ -223,7 +190,8 @@ export default function TeacherGradesPage() {
       setNewGradeType("")
       setNewGradeStudent("")
       toast.success("Grade added successfully")
-      fetchClassGrades()
+      // Refresh data
+      fetchClassData(selectedClass)
     } catch (error: any) {
       toast.error(error.message)
     } finally {
