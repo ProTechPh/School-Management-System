@@ -9,8 +9,7 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  // SECURITY FIX: Global CSRF Protection
-  // Enforce Origin validation for all state-changing API requests
+  // 1. Global CSRF Protection
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const method = request.method.toUpperCase()
     if (["POST", "PUT", "DELETE", "PATCH"].includes(method)) {
@@ -50,12 +49,25 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Protect dashboard routes and sensitive endpoints
-  const protectedPaths = ["/admin", "/teacher", "/student", "/test-supabase"]
-  const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
+  // Define protected path prefixes and their required roles
+  const routeRules = [
+    { prefix: "/admin", roles: ["admin"] },
+    { prefix: "/api/admin", roles: ["admin"] },
+    { prefix: "/teacher", roles: ["teacher"] },
+    { prefix: "/api/teacher", roles: ["teacher"] },
+    { prefix: "/student", roles: ["student"] },
+    { prefix: "/api/student", roles: ["student"] },
+    { prefix: "/test-supabase", roles: ["admin"] },
+  ]
+
+  const matchedRule = routeRules.find(rule => 
+    request.nextUrl.pathname.startsWith(rule.prefix)
+  )
+
+  const isApiRoute = request.nextUrl.pathname.startsWith("/api/")
 
   if (user) {
-    // Check role, password status, and active status from DB
+    // Check account status
     const { data: userData } = await supabase
       .from("users")
       .select("role, must_change_password, is_active")
@@ -64,9 +76,10 @@ export async function middleware(request: NextRequest) {
     
     // Enforce Account Status
     if (userData && userData.is_active === false) {
-      if (isProtected || request.nextUrl.pathname.startsWith("/api/")) {
-         return NextResponse.redirect(new URL("/login?error=account_disabled", request.url))
+      if (isApiRoute) {
+         return NextResponse.json({ error: "Account disabled" }, { status: 403 })
       }
+      return NextResponse.redirect(new URL("/login?error=account_disabled", request.url))
     }
 
     // Enforce Password Change Policy
@@ -78,28 +91,28 @@ export async function middleware(request: NextRequest) {
         request.nextUrl.pathname.startsWith("/api/auth")
 
       if (!isAllowedPath) {
+        if (isApiRoute) {
+          return NextResponse.json({ error: "Password change required" }, { status: 403 })
+        }
         return NextResponse.redirect(new URL("/change-password", request.url))
       }
     }
 
-    if (isProtected) {
+    // Enforce Role-Based Access Control
+    if (matchedRule) {
       const role = userData?.role
-
-      if (request.nextUrl.pathname.startsWith("/admin") && role !== "admin") {
-        return NextResponse.redirect(new URL("/", request.url))
-      }
-      if (request.nextUrl.pathname.startsWith("/teacher") && role !== "teacher") {
-        return NextResponse.redirect(new URL("/", request.url))
-      }
-      if (request.nextUrl.pathname.startsWith("/student") && role !== "student") {
-        return NextResponse.redirect(new URL("/", request.url))
-      }
-      if (request.nextUrl.pathname.startsWith("/test-supabase") && role !== "admin") {
+      if (!matchedRule.roles.includes(role)) {
+        if (isApiRoute) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        }
         return NextResponse.redirect(new URL("/", request.url))
       }
     }
-  } else if (isProtected) {
-    // No user, redirect to login
+  } else if (matchedRule) {
+    // No user, but route is protected
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     return NextResponse.redirect(new URL("/login", request.url))
   }
 

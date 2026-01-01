@@ -132,14 +132,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Already checked in" }, { status: 400 })
     }
 
-    // 5. SECURITY FIX: Robust Location Verification (GPS + IP)
+    // 5. SECURITY FIX: Robust Location Verification (IP Priority)
     if (session.require_location) {
-      // 5a. IP Check (Strict Enforcement if configured)
+      // 5a. IP Check (Strict Enforcement)
+      // This is the primary defense against GPS spoofing.
+      // If SCHOOL_IP_ADDRESS is configured, we trust it over the client-provided GPS.
       const allowedIps = process.env.SCHOOL_IP_ADDRESS // Can be comma separated
       
       if (allowedIps) {
-        // SECURITY FIX: Get the FIRST IP in the chain (Real Client IP) or x-real-ip
-        // Standard convention: client, proxy1, proxy2...
         const forwardedFor = request.headers.get("x-forwarded-for")
         const realIp = request.headers.get("x-real-ip")
         
@@ -162,12 +162,13 @@ export async function POST(request: Request) {
 
         if (!isAllowed) {
             return NextResponse.json({ 
-              error: "You must be connected to the school network to check in." 
+              error: "Location verification failed: You must be connected to the school network (Wi-Fi)." 
             }, { status: 403 })
         }
       }
 
-      // 5b. GPS Check
+      // 5b. GPS Check (Secondary / Fallback)
+      // We still perform this check, but it's secondary to the IP check if configured.
       if (!latitude || !longitude) {
         return NextResponse.json({ error: "GPS location is required for this session." }, { status: 400 })
       }
