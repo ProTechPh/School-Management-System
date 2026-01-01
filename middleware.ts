@@ -98,6 +98,32 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    // SECURITY FIX: Enforce MFA for Admin Routes
+    // Check if user is admin and trying to access admin routes
+    if (userData?.role === "admin" && request.nextUrl.pathname.startsWith("/admin")) {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      // Check if session is AAL2 (MFA verified)
+      // Note: This requires MFA to be enrolled. If not enrolled, we should force enrollment or block.
+      // For now, we'll check the level. If 'aal1', redirect to verification.
+      if (session && session.user.app_metadata.aal !== 'aal2') {
+         // Check if user has enrolled factors
+         const { data: factors } = await supabase.auth.mfa.listFactors()
+         
+         if (factors && factors.totp.length > 0) {
+            // Has factors but not verified in this session -> Redirect to verify
+            if (!request.nextUrl.pathname.startsWith("/auth/mfa/verify")) {
+               return NextResponse.redirect(new URL("/auth/mfa/verify", request.url))
+            }
+         } else {
+            // No factors enrolled -> Force enrollment
+            if (!request.nextUrl.pathname.startsWith("/auth/mfa/enroll")) {
+               return NextResponse.redirect(new URL("/auth/mfa/enroll", request.url))
+            }
+         }
+      }
+    }
+
     // Enforce Role-Based Access Control
     if (matchedRule) {
       const role = userData?.role
@@ -127,6 +153,7 @@ export const config = {
     "/test-supabase/:path*",
     "/change-password",
     "/login",
+    "/auth/mfa/:path*",
     "/api/:path*"
   ],
 }

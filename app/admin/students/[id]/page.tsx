@@ -196,38 +196,52 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     if (!selectedClassId) return
     setEnrolling(true)
 
-    const supabase = createClient()
-    
-    const { error } = await supabase.from("class_students").insert({
-      student_id: id,
-      class_id: selectedClassId,
-    })
+    try {
+      // SECURITY FIX: Use secure API for enrollment
+      const response = await fetch("/api/admin/enroll-student", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: id,
+          classId: selectedClassId,
+        })
+      })
 
-    if (error) {
-      toast.error("Failed to enroll student", { description: error.message })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to enroll student")
+      }
+
+      toast.success("Student enrolled successfully")
+      setEnrollDialogOpen(false)
+      setSelectedClassId("")
+      fetchEnrolledClasses()
+    } catch (error: any) {
+      toast.error("Enrollment failed", { description: error.message })
+    } finally {
       setEnrolling(false)
-      return
     }
-
-    toast.success("Student enrolled successfully")
-    setEnrollDialogOpen(false)
-    setSelectedClassId("")
-    setEnrolling(false)
-    fetchEnrolledClasses()
   }
 
   const handleUnenrollClass = async (enrollmentId: string, className: string) => {
-    const supabase = createClient()
-    
-    const { error } = await supabase.from("class_students").delete().eq("id", enrollmentId)
+    try {
+      // SECURITY FIX: Use secure API for unenrollment
+      const response = await fetch("/api/admin/unenroll-student", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enrollmentId })
+      })
 
-    if (error) {
-      toast.error("Failed to unenroll student", { description: error.message })
-      return
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to unenroll student")
+      }
+
+      toast.success(`Unenrolled from ${className}`)
+      fetchEnrolledClasses()
+    } catch (error: any) {
+      toast.error("Unenrollment failed", { description: error.message })
     }
-
-    toast.success(`Unenrolled from ${className}`)
-    fetchEnrolledClasses()
   }
 
   const fetchUnlinkedAccounts = async () => {

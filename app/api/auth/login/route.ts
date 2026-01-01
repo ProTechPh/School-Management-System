@@ -27,9 +27,11 @@ export async function POST(request: Request) {
       password,
     })
 
+    const GENERIC_ERROR = "Invalid login credentials"
+
     if (error) {
       // SECURITY FIX: Generic error message to prevent user enumeration
-      return NextResponse.json({ error: "Invalid login details" }, { status: 401 })
+      return NextResponse.json({ error: GENERIC_ERROR }, { status: 401 })
     }
 
     if (data.user) {
@@ -43,9 +45,9 @@ export async function POST(request: Request) {
       if (userData && userData.is_active === false) {
         // Sign out immediately
         await supabase.auth.signOut()
-        // SECURITY FIX: Generic error message here too
+        // SECURITY FIX: Return same generic error for disabled accounts
         return NextResponse.json(
-          { error: "Invalid login details" }, 
+          { error: GENERIC_ERROR }, 
           { status: 401 }
         )
       }

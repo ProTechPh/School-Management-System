@@ -47,23 +47,16 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed")
       }
 
-      // Login successful, check user status
+      // Login successful, check user role/password policy
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
         const { data: userData } = await supabase
           .from("users")
-          .select("role, is_active, must_change_password")
+          .select("role, must_change_password")
           .eq("id", user.id)
           .single()
-
-        if (userData?.is_active === false) {
-          await supabase.auth.signOut()
-          setError("Your account has been disabled. Please contact your administrator.")
-          setLoading(false)
-          return
-        }
 
         if (userData?.must_change_password === true) {
           router.push("/change-password")

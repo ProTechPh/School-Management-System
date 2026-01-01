@@ -36,11 +36,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // 1. Network Fencing (Optional Check)
-    // In production, SCHOOL_IP_RANGE would be set. If not set, skip check.
+    // 1. Network Fencing (STRICT CHECK)
     const schoolIpRange = process.env.SCHOOL_IP_RANGE
     if (schoolIpRange) {
-      // Simple check: Does IP start with the allowed range?
+      // If configured, this check is mandatory
       // Real implementation would use CIDR parsing library
       if (!ip.startsWith(schoolIpRange)) {
          return NextResponse.json({ error: "You must be connected to the school Wi-Fi to check in." }, { status: 403 })
@@ -127,8 +126,6 @@ export async function POST(request: Request) {
     }
 
     // 7. Location Logic (GPS)
-    let isSuspiciousLocation = false;
-
     if (session.require_location) {
       if (latitude === undefined || longitude === undefined) {
         return NextResponse.json({ 
@@ -149,9 +146,12 @@ export async function POST(request: Request) {
           settings.longitude
         )
 
-        // Suspicious Check: Exact coordinate match (0m distance)
+        // SECURITY FIX: Block suspiciously perfect matches (GPS spoofing indicator)
+        // Real GPS always has some variance. Exact matches (0m) or extremely small deltas (<1m) are suspicious.
         if (distance < 1) {
-           isSuspiciousLocation = true;
+           return NextResponse.json({ 
+             error: "Location signal rejected. Please ensure you are using a real device." 
+           }, { status: 403 })
         }
 
         // Basic Geofence Check
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
       .insert({
         session_id: sessionId,
         student_id: user.id,
-        location_verified: !isSuspiciousLocation
+        location_verified: session.require_location // Mark as verified if we passed the checks
       })
 
     if (insertError) throw insertError
