@@ -340,41 +340,27 @@ export default function TeacherQuizzesPage() {
     setGradingAttempt(attempt)
     setGradingLoading(true)
     
-    const supabase = createClient()
-    
-    const { data: answers } = await supabase
-      .from("quiz_attempt_answers")
-      .select(`
-        *,
-        question:quiz_questions (id, question, type, options, correct_answer, points)
-      `)
-      .eq("attempt_id", attempt.id)
-    
-    if (answers) {
-      setGradingAnswers(answers as AttemptAnswer[])
+    // SECURITY FIX: Use secure API route instead of direct client-side fetching
+    try {
+      const response = await fetch(`/api/teacher/grading/${attempt.id}`)
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch grading data")
+      }
+
+      const data = await response.json()
+      
+      setGradingAnswers(data.answers || [])
+      setActivityLogs(data.logs || [])
+      setAttemptActivitySummary(data.attempt)
+      
+    } catch (error: any) {
+      console.error("Grading fetch error:", error)
+      toast.error("Failed to load grading details")
+      setGradingAttempt(null)
+    } finally {
+      setGradingLoading(false)
     }
-    
-    const { data: logs } = await supabase
-      .from("quiz_activity_logs")
-      .select("id, event_type, details, created_at")
-      .eq("attempt_id", attempt.id)
-      .order("created_at", { ascending: true })
-    
-    if (logs) {
-      setActivityLogs(logs as ActivityLog[])
-    }
-    
-    const { data: attemptDetails } = await supabase
-      .from("quiz_attempts")
-      .select("tab_switches, copy_paste_count, exit_attempts")
-      .eq("id", attempt.id)
-      .single()
-    
-    if (attemptDetails) {
-      setAttemptActivitySummary(attemptDetails)
-    }
-    
-    setGradingLoading(false)
   }
 
   const handleUpdateAnswer = (answerId: string, field: "is_correct" | "points_awarded", value: boolean | number) => {
