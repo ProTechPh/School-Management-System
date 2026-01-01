@@ -23,8 +23,9 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 export async function POST(request: Request) {
   try {
     const ip = getClientIp(request)
-    const isAllowed = await checkRateLimit(ip, "check-in", 10, 60 * 1000)
     
+    // Rate Limit: Too many requests from same IP (DoS protection)
+    const isAllowed = await checkRateLimit(ip, "check-in", 20, 60 * 1000)
     if (!isAllowed) {
       return NextResponse.json({ error: "Too many check-in attempts. Please wait." }, { status: 429 })
     }
@@ -36,17 +37,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // 1. Network Fencing (STRICT CHECK)
-    // Ensure student is connected to School Wi-Fi (CIDR check)
+    // 1. Network Fencing & Abuse Detection
     const schoolIpRange = process.env.SCHOOL_IP_RANGE
-    if (schoolIpRange) {
-      // Simple prefix check for demo purposes. 
-      // In production, use a CIDR library like 'ip-range-check'
-      // Example env: SCHOOL_IP_RANGE="203.0.113."
-      if (!ip.startsWith(schoolIpRange)) {
-         return NextResponse.json({ 
-           error: "Network check failed. You must be connected to the school Wi-Fi." 
-         }, { status: 403 })
+    const isSchoolNetwork = schoolIpRange && ip.startsWith(schoolIpRange)
+
+    // If configured, enforce school network
+    if (schoolIpRange && !isSchoolNetwork) {
+       return NextResponse.json({ 
+         error: "Network check failed. You must be connected to the school Wi-Fi." 
+       }, { status: 403 })
+    }
+
+    // If NOT on school network (and not strictly enforced), check for IP sharing abuse
+    // This prevents one student/script checking in for multiple people remotely
+    if (!isSchoolNetwork) {
+      // Check how many DISTINCT students have used this IP in the last 15 minutes
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+      
+      const { data: recentCheckins } = await supabase
+        .from("qr_checkins")
+        .select("student_id")
+        .eq("ip_address", ip)
+        .gte("created_at", fifteenMinutesAgo)
+      
+      const distinctStudents = new Set(recentCheckins?.map(c => c.student_id))
+      // If the current user hasn't checked in yet, count them as potentially the next one
+      distinctStudents.add(user.id)
+
+      // Allow max 3 students per IP (e.g., siblings or shared hotspot), block more
+      if (distinctStudents.size > 3) {
+        return NextResponse.json({ 
+          error: "Suspicious activity detected. Too many check-ins from this network." 
+        }, { status: 403 })
       }
     }
 
@@ -166,13 +188,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // 8. Perform Insert
+    // 8. Perform Insert (Now capturing IP)
     const { error: insertError } = await supabase
       .from("qr_checkins")
       .insert({
         session_id: sessionId,
         student_id: user.id,
-        location_verified: session.require_location
+        location_verified: session.require_location,
+        ip_address: ip
       })
 
     if (insertError) throw insertError
