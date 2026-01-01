@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 // Helper to calculate schedule
 const convertTo24Hour = (time12: string) => {
@@ -25,6 +27,14 @@ const getDaysFromCode = (code: string): string[] => {
 
 export async function POST(request: Request) {
   try {
+    // 1. Rate Limiting
+    const ip = getClientIp(request)
+    const isAllowed = await checkRateLimit(ip, "create-class", 10, 60 * 1000) // 10 classes per minute
+    
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 

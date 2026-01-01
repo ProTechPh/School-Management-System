@@ -1,8 +1,18 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function POST(request: Request) {
   try {
+    // 1. Rate Limiting
+    const ip = getClientIp(request)
+    const isAllowed = await checkRateLimit(ip, "create-announcement", 5, 60 * 1000) // 5 per minute
+    
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 

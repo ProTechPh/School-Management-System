@@ -1,9 +1,21 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
 
 export async function POST(request: Request) {
   try {
+    // 1. Rate Limiting (High frequency allowed for rotation, but capped)
+    // QR codes rotate every 3 seconds. Allow slightly more to account for lag/multiple tabs.
+    // 30 requests per minute = 1 every 2 seconds.
+    const ip = getClientIp(request)
+    const isAllowed = await checkRateLimit(ip, "generate-qr", 30, 60 * 1000) 
+    
+    if (!isAllowed) {
+      return NextResponse.json({ error: "Too many requests. Please wait." }, { status: 429 })
+    }
+
     const secret = process.env.QR_SECRET
     if (!secret) {
       console.error("QR_SECRET is not configured")
