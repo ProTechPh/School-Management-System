@@ -1,4 +1,57 @@
-<div className="flex items-center gap-2">
+.percentage}%)</Badge>
+                            <Button variant="outline" size="sm" onClick={() => handleOpenGrading(attempt)}><Edit3 className="h-3 w-3 mr-1" />Grade</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-4 text-center">No submissions yet</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!gradingAttempt} onOpenChange={() => { setGradingAttempt(null); setGradingAnswers([]); setActivityLogs([]); setAttemptActivitySummary(null); }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Edit3 className="h-5 w-5" />Grade Quiz - {gradingAttempt?.student?.name}</DialogTitle>
+            </DialogHeader>
+            {gradingLoading ? (
+              <div className="flex items-center justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+            ) : (
+              <div className="py-4 space-y-4">
+                <div className="grid grid-cols-3 gap-4 text-sm bg-muted/50 rounded-lg p-3">
+                  <div><span className="text-muted-foreground">Current Score:</span><span className="ml-2 font-medium">{gradingAnswers.reduce((sum, a) => sum + (a.points_awarded || 0), 0)}</span></div>
+                  <div><span className="text-muted-foreground">Max Score:</span><span className="ml-2 font-medium">{gradingAnswers.reduce((sum, a) => sum + (a.question?.points || 0), 0)}</span></div>
+                  <div><span className="text-muted-foreground">Percentage:</span><span className="ml-2 font-medium">{gradingAnswers.length > 0 ? Math.round((gradingAnswers.reduce((sum, a) => sum + (a.points_awarded || 0), 0) / gradingAnswers.reduce((sum, a) => sum + (a.question?.points || 0), 0)) * 100) : 0}%</span></div>
+                </div>
+
+                {attemptActivitySummary && (attemptActivitySummary.tab_switches && attemptActivitySummary.tab_switches > 0 || attemptActivitySummary.copy_paste_count && attemptActivitySummary.copy_paste_count > 0 || attemptActivitySummary.exit_attempts && attemptActivitySummary.exit_attempts > 0) && (
+                  <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        <span className="font-medium text-amber-500 text-sm">Unverified Client Metrics (Self-Reported)</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Info className="h-3 w-3" />
+                        <span>Metrics are advisory only</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <MousePointer className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Tab Switches:</span>
+                        <span className={`font-medium ${attemptActivitySummary.tab_switches && attemptActivitySummary.tab_switches > 3 ? "text-red-500" : attemptActivitySummary.tab_switches && attemptActivitySummary.tab_switches > 0 ? "text-amber-500" : ""}`}>{attemptActivitySummary.tab_switches || 0}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Copy className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Copy/Paste:</span>
+                        <span className={`font-medium ${attemptActivitySummary.copy_paste_count && attemptActivitySummary.copy_paste_count > 3 ? "text-red-500" : attemptActivitySummary.copy_paste_count && attemptActivitySummary.copy_paste_count > 0 ? "text-amber-500" : ""}`}>{attemptActivitySummary.copy_paste_count || 0}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
                         <LogOut className="h-4 w-4 text-muted-foreground" />
                         <span className="text-muted-foreground">Exit Attempts:</span>
                         <span className={`font-medium ${attemptActivitySummary.exit_attempts && attemptActivitySummary.exit_attempts > 0 ? "text-red-500" : ""}`}>{attemptActivitySummary.exit_attempts || 0}</span>
