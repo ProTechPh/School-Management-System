@@ -26,7 +26,7 @@ interface UserAccount {
   id: string
   email: string
   name: string
-  role: "admin" | "teacher" | "student"
+  role: "admin" | "teacher" | "student" | "parent"
   created_at: string
   is_active: boolean
 }
@@ -279,6 +279,7 @@ export default function UsersPage() {
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="teacher">Teacher</SelectItem>
                 <SelectItem value="student">Student</SelectItem>
+                <SelectItem value="parent">Parent</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -343,6 +344,7 @@ export default function UsersPage() {
                       <SelectContent>
                         <SelectItem value="student">Student</SelectItem>
                         <SelectItem value="teacher">Teacher</SelectItem>
+                        <SelectItem value="parent">Parent/Guardian</SelectItem>
                         <SelectItem value="admin">Administrator</SelectItem>
                       </SelectContent>
                     </Select>

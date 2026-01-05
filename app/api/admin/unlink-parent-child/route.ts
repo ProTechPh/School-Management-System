@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
-export async function GET() {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient()
 
@@ -21,20 +21,29 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Get all students
-    const { data: students, error } = await supabase
-      .from("users")
-      .select("id, name, email")
-      .eq("role", "student")
-      .order("name")
+    const { parentId, studentId } = await request.json()
+
+    if (!parentId || !studentId) {
+      return NextResponse.json(
+        { error: "Parent ID and Student ID are required" },
+        { status: 400 }
+      )
+    }
+
+    // Delete parent-child relationship
+    const { error } = await supabase
+      .from("parent_children")
+      .delete()
+      .eq("parent_id", parentId)
+      .eq("student_id", studentId)
 
     if (error) throw error
 
-    return NextResponse.json({ students: students || [] })
+    return NextResponse.json({ success: true })
   } catch (error: any) {
-    console.error("Error fetching students:", error)
+    console.error("Error unlinking parent and child:", error)
     return NextResponse.json(
-      { error: error.message || "Failed to fetch students" },
+      { error: error.message || "Failed to unlink parent and child" },
       { status: 500 }
     )
   }
