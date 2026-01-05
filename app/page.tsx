@@ -101,8 +101,8 @@ export default function HomePage() {
   ]
 
   const stats = [
-    { value: "3", label: "User Roles" },
-    { value: "10+", label: "Features" },
+    { value: "4", label: "User Roles" },
+    { value: "15+", label: "Features" },
     { value: "QR", label: "Check-in" },
     { value: "AI", label: "Powered" }
   ]
@@ -205,7 +205,7 @@ export default function HomePage() {
 
       {/* Roles Section */}
       <section className="mx-auto max-w-6xl px-4 py-20">
-        <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
           {[
             { 
               role: "Admin", 
@@ -224,6 +224,12 @@ export default function HomePage() {
               icon: GraduationCap,
               description: "View classes, check grades, and QR code attendance",
               features: ["View schedule", "Check grades", "QR check-in"]
+            },
+            { 
+              role: "Parent", 
+              icon: Users,
+              description: "Monitor your child's progress, grades, and attendance",
+              features: ["View grades", "Track attendance", "Message teachers"]
             }
           ].map((item, i) => (
             <div 

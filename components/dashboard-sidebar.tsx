@@ -28,8 +28,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { useState } from "react"
-
-type UserRole = "admin" | "teacher" | "student"
+import type { UserRole } from "@/lib/types"
 
 interface SidebarProps {
   role: UserRole
@@ -43,11 +42,13 @@ const adminLinks = [
   { href: "/admin/users", label: "User Accounts", icon: UserPlus },
   { href: "/admin/students", label: "Students", icon: Users },
   { href: "/admin/teachers", label: "Teachers", icon: GraduationCap },
+  { href: "/admin/parents", label: "Parents", icon: Users },
   { href: "/admin/classes", label: "Classes", icon: BookOpen },
   { href: "/admin/lessons", label: "Lessons", icon: FileText },
   { href: "/admin/quizzes", label: "Quizzes", icon: FileQuestion },
   { href: "/admin/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/admin/grades", label: "Grades", icon: Calendar },
+  { href: "/admin/calendar", label: "Calendar", icon: Calendar },
   { href: "/admin/schedule", label: "Schedule", icon: Calendar },
   { href: "/admin/chat", label: "Messages", icon: MessageCircle },
   { href: "/admin/ai-assistant", label: "AI Assistant", icon: Bot },
@@ -61,9 +62,12 @@ const teacherLinks = [
   { href: "/teacher/classes", label: "My Classes", icon: BookOpen },
   { href: "/teacher/lessons", label: "Lessons", icon: FileText },
   { href: "/teacher/quizzes", label: "Quizzes", icon: FileQuestion },
+  { href: "/teacher/assignments", label: "Assignments", icon: FileText },
   { href: "/teacher/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/teacher/qr-attendance", label: "QR Attendance", icon: QrCode },
   { href: "/teacher/grades", label: "Grades", icon: Calendar },
+  { href: "/teacher/analytics", label: "Analytics", icon: Users },
+  { href: "/teacher/calendar", label: "Calendar", icon: Calendar },
   { href: "/teacher/schedule", label: "Schedule", icon: Calendar },
   { href: "/teacher/chat", label: "Messages", icon: MessageCircle },
   { href: "/teacher/ai-assistant", label: "AI Assistant", icon: Bot },
@@ -76,13 +80,25 @@ const studentLinks = [
   { href: "/student/classes", label: "My Classes", icon: BookOpen },
   { href: "/student/lessons", label: "Lessons", icon: FileText },
   { href: "/student/quizzes", label: "Quizzes", icon: FileQuestion },
+  { href: "/student/assignments", label: "Assignments", icon: FileText },
   { href: "/student/grades", label: "My Grades", icon: Calendar },
+  { href: "/student/analytics", label: "Progress", icon: Users },
+  { href: "/student/calendar", label: "Calendar", icon: Calendar },
   { href: "/student/schedule", label: "Schedule", icon: Calendar },
   { href: "/student/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/student/qr-checkin", label: "QR Check-in", icon: QrCode },
   { href: "/student/chat", label: "Messages", icon: MessageCircle },
   { href: "/student/ai-assistant", label: "AI Assistant", icon: Bot },
   { href: "/student/profile", label: "My Profile", icon: User },
+]
+
+const parentLinks = [
+  { href: "/parent", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/parent/grades", label: "Grades", icon: Calendar },
+  { href: "/parent/attendance", label: "Attendance", icon: ClipboardCheck },
+  { href: "/parent/calendar", label: "Calendar", icon: Calendar },
+  { href: "/parent/chat", label: "Messages", icon: MessageCircle },
+  { href: "/parent/announcements", label: "Announcements", icon: Megaphone },
 ]
 
 function SidebarContent({ 
@@ -94,8 +110,8 @@ function SidebarContent({
   const pathname = usePathname()
   const router = useRouter()
 
-  const links = role === "admin" ? adminLinks : role === "teacher" ? teacherLinks : studentLinks
-  const roleLabel = role === "admin" ? "Administrator" : role === "teacher" ? "Teacher" : "Student"
+  const links = role === "admin" ? adminLinks : role === "teacher" ? teacherLinks : role === "parent" ? parentLinks : studentLinks
+  const roleLabel = role === "admin" ? "Administrator" : role === "teacher" ? "Teacher" : role === "parent" ? "Parent" : "Student"
 
   const handleLogout = async () => {
     const supabase = createClient()
