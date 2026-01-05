@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { calculateAttendanceStats } from "@/lib/attendance-utils"
 
 // GET - Fetch child's attendance records
 export async function GET(
@@ -64,17 +65,7 @@ export async function GET(
     }
 
     // Calculate statistics
-    const stats = {
-      present: attendance?.filter((a) => a.status === "present").length || 0,
-      absent: attendance?.filter((a) => a.status === "absent").length || 0,
-      late: attendance?.filter((a) => a.status === "late").length || 0,
-      excused: attendance?.filter((a) => a.status === "excused").length || 0,
-      total: attendance?.length || 0,
-    }
-
-    stats.rate = stats.total > 0 
-      ? Math.round(((stats.present + stats.late) / stats.total) * 100) 
-      : 0
+    const stats = calculateAttendanceStats(attendance || [])
 
     return NextResponse.json({ 
       attendance: attendance || [], 

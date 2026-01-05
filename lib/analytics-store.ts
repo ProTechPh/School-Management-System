@@ -2,6 +2,7 @@
 
 import { create } from "zustand"
 import type { AttendanceStatus } from "@/lib/types"
+import { calculateAttendanceStats, type AttendanceStats } from "@/lib/attendance-utils"
 
 export interface GradeTrend {
   date: string
@@ -40,7 +41,7 @@ interface AnalyticsStore {
   
   getStudentAnalytics: (studentId: string) => StudentAnalytics | undefined
   getGradeTrendsBySubject: (studentId: string, subject: string) => GradeTrend[]
-  getAttendanceStats: (studentId: string) => { present: number; absent: number; late: number; excused: number; rate: number }
+  getAttendanceStats: (studentId: string) => AttendanceStats
   getClassAverages: (classId: string, studentIds: string[]) => { average: number; highest: number; lowest: number }
 }
 
@@ -59,17 +60,9 @@ export const useAnalyticsStore = create<AnalyticsStore>((_set, get) => ({
 
   getAttendanceStats: (studentId) => {
     const analytics = get().studentAnalytics[studentId]
-    if (!analytics) return { present: 0, absent: 0, late: 0, excused: 0, rate: 0 }
+    if (!analytics) return { present: 0, absent: 0, late: 0, excused: 0, total: 0, rate: 0 }
     
-    const trends = analytics.attendanceTrends
-    const present = trends.filter((t) => t.status === "present").length
-    const absent = trends.filter((t) => t.status === "absent").length
-    const late = trends.filter((t) => t.status === "late").length
-    const excused = trends.filter((t) => t.status === "excused").length
-    const total = trends.length
-    const rate = total > 0 ? Math.round(((present + late) / total) * 100) : 0
-    
-    return { present, absent, late, excused, rate }
+    return calculateAttendanceStats(analytics.attendanceTrends)
   },
 
   getClassAverages: (_classId, studentIds) => {

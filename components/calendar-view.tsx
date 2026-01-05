@@ -226,18 +226,140 @@ export function CalendarView({ userRole, canCreate = false }: CalendarViewProps)
                 <DialogContent>
                   <DialogHeader><DialogTitle>Create New Event</DialogTitle></DialogHeader>
                   <div className="grid gap-4 py-4">
-                    <div className="grid gap-2"><Label>Title</Label><Input value={newEvent.title} onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })} placeholder="Event title" /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2"><Label>Type</Label><Select value={newEvent.type} onValueChange={(v) => setNewEvent({ ...newEvent, type: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="class">Class</SelectItem><SelectItem value="quiz">Quiz</SelectItem><SelectItem value="assignment">Assignment</SelectItem><SelectItem value="exam">Exam</SelectItem><SelectItem value="holiday">Holiday</SelectItem><SelectItem value="meeting">Meeting</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
-                      <div className="grid gap-2"><Label>Audience</Label><Select value={newEvent.targetAudience} onValueChange={(v) => setNewEvent({ ...newEvent, targetAudience: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="personal">Personal</SelectItem><SelectItem value="all">Everyone</SelectItem>{userRole !== "student" && <SelectItem value="students">Students</SelectItem>}{userRole === "admin" && <SelectItem value="teachers">Teachers</SelectItem>}</SelectContent></Select></div>
+                    <div className="grid gap-2">
+                      <Label>Title</Label>
+                      <Input
+                        value={newEvent.title}
+                        onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                        placeholder="Event title"
+                      />
                     </div>
-                    <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Start Date</Label><Input type="date" value={newEvent.startDate} onChange={(e) => setNewEvent({ ...newEvent, startDate: e.target.value })} /></div><div className="grid gap-2"><Label>End Date</Label><Input type="date" value={newEvent.endDate} onChange={(e) => setNewEvent({ ...newEvent, endDate: e.target.value })} /></div></div>
-                    <div className="flex items-center gap-2"><Switch checked={newEvent.allDay} onCheckedChange={(checked) => setNewEvent({ ...newEvent, allDay: checked })} /><Label>All day event</Label></div>
-                    {!newEvent.allDay && <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Start Time</Label><Input type="time" value={newEvent.startTime} onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })} /></div><div className="grid gap-2"><Label>End Time</Label><Input type="time" value={newEvent.endTime} onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })} /></div></div>}
-                    <div className="grid gap-2"><Label>Location</Label><Input value={newEvent.location} onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })} placeholder="Room or location" /></div>
-                    <div className="grid gap-2"><Label>Description</Label><Textarea value={newEvent.description} onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })} placeholder="Event details" rows={3} /></div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Type</Label>
+                        <Select
+                          value={newEvent.type}
+                          onValueChange={(v) => setNewEvent({ ...newEvent, type: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="class">Class</SelectItem>
+                            <SelectItem value="quiz">Quiz</SelectItem>
+                            <SelectItem value="assignment">Assignment</SelectItem>
+                            <SelectItem value="exam">Exam</SelectItem>
+                            <SelectItem value="holiday">Holiday</SelectItem>
+                            <SelectItem value="meeting">Meeting</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="grid gap-2">
+                        <Label>Audience</Label>
+                        <Select
+                          value={newEvent.targetAudience}
+                          onValueChange={(v) => setNewEvent({ ...newEvent, targetAudience: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="personal">Personal</SelectItem>
+                            <SelectItem value="all">Everyone</SelectItem>
+                            {userRole !== "student" && (
+                              <SelectItem value="students">Students</SelectItem>
+                            )}
+                            {userRole === "admin" && (
+                              <SelectItem value="teachers">Teachers</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Start Date</Label>
+                        <Input
+                          type="date"
+                          value={newEvent.startDate}
+                          onChange={(e) => setNewEvent({ ...newEvent, startDate: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>End Date</Label>
+                        <Input
+                          type="date"
+                          value={newEvent.endDate}
+                          onChange={(e) => setNewEvent({ ...newEvent, endDate: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={newEvent.allDay}
+                        onCheckedChange={(checked) => setNewEvent({ ...newEvent, allDay: checked })}
+                      />
+                      <Label>All day event</Label>
+                    </div>
+                    
+                    {!newEvent.allDay && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label>Start Time</Label>
+                          <Input
+                            type="time"
+                            value={newEvent.startTime}
+                            onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>End Time</Label>
+                          <Input
+                            type="time"
+                            value={newEvent.endTime}
+                            onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="grid gap-2">
+                      <Label>Location</Label>
+                      <Input
+                        value={newEvent.location}
+                        onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+                        placeholder="Room or location"
+                      />
+                    </div>
+                    
+                    <div className="grid gap-2">
+                      <Label>Description</Label>
+                      <Textarea
+                        value={newEvent.description}
+                        onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                        placeholder="Event details"
+                        rows={3}
+                      />
+                    </div>
                   </div>
-                  <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setShowEventDialog(false)}>Cancel</Button><Button onClick={handleCreateEvent} disabled={saving || !newEvent.title || !newEvent.startDate}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create Event</Button></div>
+                  
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setShowEventDialog(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleCreateEvent}
+                      disabled={saving || !newEvent.title || !newEvent.startDate}
+                    >
+                      {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Create Event
+                    </Button>
+                  </div>
                 </DialogContent>
               </Dialog>
             )}
