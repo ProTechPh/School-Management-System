@@ -26,8 +26,31 @@ export async function GET(
 
   // Authorization check
   const isStudent = userData.role === "student" && user.id === studentId
-  const isTeacher = userData.role === "teacher"
   const isAdmin = userData.role === "admin"
+  
+  // Check if teacher teaches this student
+  let isTeacher = false
+  if (userData.role === "teacher") {
+    // Get classes taught by this teacher
+    const { data: teacherClasses } = await supabase
+      .from("classes")
+      .select("id")
+      .eq("teacher_id", user.id)
+    
+    const classIds = teacherClasses?.map(c => c.id) || []
+    
+    if (classIds.length > 0) {
+      // Check if student is enrolled in any of teacher's classes
+      const { data: enrollment } = await supabase
+        .from("class_students")
+        .select("id")
+        .eq("student_id", studentId)
+        .in("class_id", classIds)
+        .single()
+      
+      isTeacher = !!enrollment
+    }
+  }
   
   // Check if parent has access to this student
   let isParent = false

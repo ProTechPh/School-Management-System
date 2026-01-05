@@ -56,10 +56,16 @@ export async function PATCH(
 
   const body = await request.json()
 
+  // Whitelist allowed fields to prevent mass assignment
+  const allowedFields = ['title', 'description', 'due_date', 'max_score', 'allow_late_submission', 'status']
+  const updates = Object.keys(body)
+    .filter(key => allowedFields.includes(key))
+    .reduce((obj, key) => ({ ...obj, [key]: body[key] }), {})
+
   const { data, error } = await supabase
     .from("assignments")
     .update({
-      ...body,
+      ...updates,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
