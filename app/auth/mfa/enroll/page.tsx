@@ -77,13 +77,6 @@ export default function MFAEnrollPage() {
 
       if (error) throw error
 
-      // Log the secret key for manual entry in Google Authenticator
-      console.log("=== MFA SETUP INFO ===")
-      console.log("Factor ID:", data.id)
-      console.log("Secret Key (for manual entry):", data.totp.secret)
-      console.log("QR Code URI:", data.totp.uri)
-      console.log("======================")
-
       setFactorId(data.id)
       setSecretKey(data.totp.secret)
       setTotpUri(data.totp.uri)

@@ -28,16 +28,12 @@ export default function MFAVerifyPage() {
       const totpFactor = factors.totp[0]
       if (!totpFactor) throw new Error("No MFA factor found")
 
-      console.log("Verifying with factor:", totpFactor.id)
-
       const { data, error } = await supabase.auth.mfa.challengeAndVerify({
         factorId: totpFactor.id,
         code
       })
 
       if (error) throw error
-
-      console.log("MFA verification successful, redirecting...")
       
       // Force a full page reload to refresh the session with AAL2
       window.location.href = "/admin"
