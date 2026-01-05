@@ -15,9 +15,31 @@ export async function PATCH(
 
   const body = await request.json()
 
+  // Whitelist allowed fields to prevent mass assignment
+  const allowedFields = [
+    'title', 
+    'description', 
+    'type', 
+    'start_date', 
+    'end_date', 
+    'start_time', 
+    'end_time', 
+    'all_day', 
+    'location', 
+    'class_id', 
+    'target_audience', 
+    'color'
+  ]
+  const updates = Object.keys(body)
+    .filter(key => allowedFields.includes(key))
+    .reduce((obj, key) => ({ ...obj, [key]: body[key] }), {})
+
   const { data, error } = await supabase
     .from("calendar_events")
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update({ 
+      ...updates, 
+      updated_at: new Date().toISOString() 
+    })
     .eq("id", id)
     .eq("created_by", user.id)
     .select()
