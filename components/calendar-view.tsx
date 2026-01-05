@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -50,20 +50,44 @@ export function CalendarView({ userRole, canCreate = false }: CalendarViewProps)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [newEvent, setNewEvent] = useState({ title: "", description: "", type: "other", startDate: "", endDate: "", startTime: "", endTime: "", allDay: false, location: "", targetAudience: "personal" })
+  const [newEvent, setNewEvent] = useState({ 
+    title: "", 
+    description: "", 
+    type: "other", 
+    startDate: "", 
+    endDate: "", 
+    startTime: "", 
+    endTime: "", 
+    allDay: false, 
+    location: "", 
+    targetAudience: "personal" 
+  })
 
-  useEffect(() => { fetchEvents() }, [currentDate])
-
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     setLoading(true)
     try {
       const startDate = format(startOfMonth(subMonths(currentDate, 1)), "yyyy-MM-dd")
       const endDate = format(endOfMonth(addMonths(currentDate, 1)), "yyyy-MM-dd")
       const response = await fetch(`/api/calendar?startDate=${startDate}&endDate=${endDate}`)
-      if (response.ok) { const data = await response.json(); setEvents(data.events || []) }
-    } catch (error) { console.error("Failed to fetch events:", error) }
-    finally { setLoading(false) }
-  }
+      
+      if (response.ok) {
+        const data = await response.json()
+        setEvents(data.events || [])
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to load events")
+      }
+    } catch (error) {
+      console.error("Failed to fetch events:", error)
+      toast.error("Failed to load calendar events")
+    } finally {
+      setLoading(false)
+    }
+  }, [currentDate])
+
+  useEffect(() => {
+    fetchEvents()
+  }, [fetchEvents])
 
   const calendarDays = useMemo(() => {
     const days: Date[] = []
@@ -97,17 +121,48 @@ export function CalendarView({ userRole, canCreate = false }: CalendarViewProps)
     finally { setSaving(false) }
   }
 
+  const formatICalDate = (date: string, time?: string): string => {
+    const d = new Date(date)
+    if (time) {
+      const [h, m] = time.split(":")
+      d.setHours(parseInt(h), parseInt(m))
+    }
+    return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
+  }
+
   const handleExportEvent = (event: CalendarEvent) => {
-    const formatDate = (date: string, time?: string) => { const d = new Date(date); if (time) { const [h, m] = time.split(":"); d.setHours(parseInt(h), parseInt(m)) } return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z" }
-    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", `UID:${event.id}@edumanager`, `DTSTAMP:${formatDate(new Date().toISOString().split("T")[0])}`, `DTSTART:${formatDate(event.start_date, event.start_time || undefined)}`]
-    if (event.end_date || event.end_time) lines.push(`DTEND:${formatDate(event.end_date || event.start_date, event.end_time || undefined)}`)
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      `UID:${event.id}@edumanager`,
+      `DTSTAMP:${formatICalDate(new Date().toISOString().split("T")[0])}`,
+      `DTSTART:${formatICalDate(event.start_date, event.start_time || undefined)}`,
+    ]
+
+    if (event.end_date || event.end_time) {
+      lines.push(`DTEND:${formatICalDate(event.end_date || event.start_date, event.end_time || undefined)}`)
+    }
+
     lines.push(`SUMMARY:${event.title}`)
-    if (event.description) lines.push(`DESCRIPTION:${event.description.replace(/\n/g, "\\n")}`)
-    if (event.location) lines.push(`LOCATION:${event.location}`)
+    
+    if (event.description) {
+      lines.push(`DESCRIPTION:${event.description.replace(/\n/g, "\\n")}`)
+    }
+    
+    if (event.location) {
+      lines.push(`LOCATION:${event.location}`)
+    }
+
     lines.push("END:VEVENT", "END:VCALENDAR")
+
     const blob = new Blob([lines.join("\r\n")], { type: "text/calendar" })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement("a"); a.href = url; a.download = `${event.title.replace(/\s+/g, "_")}.ics`; a.click(); URL.revokeObjectURL(url)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${event.title.replace(/\s+/g, "_")}.ics`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   const selectedDateEvents = selectedDate ? getEventsForDay(selectedDate) : []
