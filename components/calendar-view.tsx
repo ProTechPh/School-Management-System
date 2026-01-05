@@ -109,16 +109,52 @@ export function CalendarView({ userRole, canCreate = false }: CalendarViewProps)
 
   const handleCreateEvent = async () => {
     if (!newEvent.title || !newEvent.startDate) return
+    
     setSaving(true)
     try {
       const response = await fetch("/api/calendar", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newEvent.title, description: newEvent.description, type: newEvent.type, startDate: newEvent.startDate, endDate: newEvent.endDate || null, startTime: newEvent.startTime || null, endTime: newEvent.endTime || null, allDay: newEvent.allDay, location: newEvent.location || null, targetAudience: newEvent.targetAudience }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newEvent.title,
+          description: newEvent.description,
+          type: newEvent.type,
+          startDate: newEvent.startDate,
+          endDate: newEvent.endDate || null,
+          startTime: newEvent.startTime || null,
+          endTime: newEvent.endTime || null,
+          allDay: newEvent.allDay,
+          location: newEvent.location || null,
+          targetAudience: newEvent.targetAudience,
+        }),
       })
-      if (response.ok) { toast.success("Event created"); setShowEventDialog(false); setNewEvent({ title: "", description: "", type: "other", startDate: "", endDate: "", startTime: "", endTime: "", allDay: false, location: "", targetAudience: "personal" }); fetchEvents() }
-      else { const data = await response.json(); toast.error(data.error || "Failed to create event") }
-    } catch { toast.error("Failed to create event") }
-    finally { setSaving(false) }
+
+      if (response.ok) {
+        toast.success("Event created")
+        setShowEventDialog(false)
+        setNewEvent({
+          title: "",
+          description: "",
+          type: "other",
+          startDate: "",
+          endDate: "",
+          startTime: "",
+          endTime: "",
+          allDay: false,
+          location: "",
+          targetAudience: "personal",
+        })
+        fetchEvents()
+      } else {
+        const data = await response.json()
+        toast.error(data.error || "Failed to create event")
+      }
+    } catch (error) {
+      console.error("Failed to create event:", error)
+      toast.error("Failed to create event")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const formatICalDate = (date: string, time?: string): string => {
@@ -167,7 +203,13 @@ export function CalendarView({ userRole, canCreate = false }: CalendarViewProps)
 
   const selectedDateEvents = selectedDate ? getEventsForDay(selectedDate) : []
 
-  if (loading) return <div className="flex items-center justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -203,14 +245,57 @@ export function CalendarView({ userRole, canCreate = false }: CalendarViewProps)
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (<div key={day} className="bg-muted/50 p-2 text-center text-sm font-medium text-muted-foreground">{day}</div>))}
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <div
+                key={day}
+                className="bg-muted/50 p-2 text-center text-sm font-medium text-muted-foreground"
+              >
+                {day}
+              </div>
+            ))}
             {calendarDays.map((day, idx) => {
               const dayEvents = getEventsForDay(day)
               const isSelected = selectedDate && isSameDay(day, selectedDate)
-              return (<button key={idx} onClick={() => setSelectedDate(day)} className={cn("min-h-[80px] p-1 text-left bg-card hover:bg-muted/50 transition-colors", !isSameMonth(day, currentDate) && "text-muted-foreground/50", isToday(day) && "bg-primary/5", isSelected && "ring-2 ring-primary ring-inset")}>
-                <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-sm", isToday(day) && "bg-primary text-primary-foreground font-semibold")}>{format(day, "d")}</span>
-                <div className="mt-1 space-y-0.5">{dayEvents.slice(0, 2).map((event) => (<div key={event.id} className={cn("truncate rounded px-1 py-0.5 text-xs text-white", eventTypeColors[event.type] || eventTypeColors.other)}>{event.title}</div>))}{dayEvents.length > 2 && <div className="text-xs text-muted-foreground px-1">+{dayEvents.length - 2} more</div>}</div>
-              </button>)
+              
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedDate(day)}
+                  className={cn(
+                    "min-h-[80px] p-1 text-left bg-card hover:bg-muted/50 transition-colors",
+                    !isSameMonth(day, currentDate) && "text-muted-foreground/50",
+                    isToday(day) && "bg-primary/5",
+                    isSelected && "ring-2 ring-primary ring-inset"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-sm",
+                      isToday(day) && "bg-primary text-primary-foreground font-semibold"
+                    )}
+                  >
+                    {format(day, "d")}
+                  </span>
+                  <div className="mt-1 space-y-0.5">
+                    {dayEvents.slice(0, 2).map((event) => (
+                      <div
+                        key={event.id}
+                        className={cn(
+                          "truncate rounded px-1 py-0.5 text-xs text-white",
+                          eventTypeColors[event.type] || eventTypeColors.other
+                        )}
+                      >
+                        {event.title}
+                      </div>
+                    ))}
+                    {dayEvents.length > 2 && (
+                      <div className="text-xs text-muted-foreground px-1">
+                        +{dayEvents.length - 2} more
+                      </div>
+                    )}
+                  </div>
+                </button>
+              )
             })}
           </div>
         </CardContent>
@@ -218,7 +303,70 @@ export function CalendarView({ userRole, canCreate = false }: CalendarViewProps)
       <Card className="bg-card">
         <CardHeader><CardTitle className="text-base font-semibold">{selectedDate ? format(selectedDate, "EEEE, MMMM d") : "Select a date"}</CardTitle></CardHeader>
         <CardContent>
-          {selectedDate ? (selectedDateEvents.length > 0 ? (<div className="space-y-3">{selectedDateEvents.map((event) => (<div key={event.id} className="rounded-lg border border-border bg-muted/30 p-3"><div className="flex items-start justify-between gap-2"><div className="flex-1 min-w-0"><div className="flex items-center gap-2 mb-1"><Badge variant="outline" className="capitalize">{event.type}</Badge>{event.class?.name && <span className="text-xs text-muted-foreground">{event.class.name}</span>}</div><h4 className="font-medium text-card-foreground truncate">{event.title}</h4>{event.description && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{event.description}</p>}</div><Button variant="ghost" size="icon" className="shrink-0" onClick={() => handleExportEvent(event)} title="Export to calendar"><Download className="h-4 w-4" /></Button></div><div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">{!event.all_day && event.start_time && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{event.start_time}{event.end_time && ` - ${event.end_time}`}</span>}{event.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{event.location}</span>}</div></div>))}</div>) : (<p className="text-sm text-muted-foreground text-center py-8">No events scheduled for this day</p>)) : (<p className="text-sm text-muted-foreground text-center py-8">Click on a date to view events</p>)}
+          {selectedDate ? (
+            selectedDateEvents.length > 0 ? (
+              <div className="space-y-3">
+                {selectedDateEvents.map((event) => (
+                  <div key={event.id} className="rounded-lg border border-border bg-muted/30 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="outline" className="capitalize">
+                            {event.type}
+                          </Badge>
+                          {event.class?.name && (
+                            <span className="text-xs text-muted-foreground">
+                              {event.class.name}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-medium text-card-foreground truncate">
+                          {event.title}
+                        </h4>
+                        {event.description && (
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                            {event.description}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0"
+                        onClick={() => handleExportEvent(event)}
+                        title="Export to calendar"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      {!event.all_day && event.start_time && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {event.start_time}
+                          {event.end_time && ` - ${event.end_time}`}
+                        </span>
+                      )}
+                      {event.location && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {event.location}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No events scheduled for this day
+              </p>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Click on a date to view events
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
