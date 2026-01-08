@@ -1,5 +1,16 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { z } from "zod"
+import { handleApiError, ApiErrors } from "@/lib/api-errors"
+
+/**
+ * 输入验证 Schema
+ * Input validation schema for user status toggle
+ */
+const toggleStatusSchema = z.object({
+  userId: z.string().uuid("Invalid user ID format"),
+  status: z.boolean(),
+})
 
 export async function POST(request: Request) {
   try {
@@ -7,7 +18,7 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return ApiErrors.unauthorized()
     }
 
     // Verify Admin Role
@@ -18,13 +29,22 @@ export async function POST(request: Request) {
       .single()
 
     if (userData?.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return ApiErrors.forbidden()
     }
 
-    const { userId, status } = await request.json()
+    // SECURITY FIX: Validate input with Zod schema
+    const body = await request.json()
+    const validationResult = toggleStatusSchema.safeParse(body)
 
-    if (!userId || typeof status !== "boolean") {
-      return NextResponse.json({ error: "Invalid parameters" }, { status: 400 })
+    if (!validationResult.success) {
+      return ApiErrors.badRequest("Invalid parameters")
+    }
+
+    const { userId, status } = validationResult.data
+
+    // SECURITY: Prevent admin from disabling their own account
+    if (userId === user.id) {
+      return ApiErrors.badRequest("Cannot modify your own account status")
     }
 
     // Perform update
@@ -36,7 +56,7 @@ export async function POST(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    return handleApiError(error, "toggle-user-status")
   }
 }

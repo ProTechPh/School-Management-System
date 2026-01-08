@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { FileText, Video, LinkIcon, Download, Play, ExternalLink, File, BookOpen, Loader2, AlertTriangle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { isSupabaseStorageUrl } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface Material {
@@ -111,6 +112,11 @@ export default function StudentLessonsPage() {
       }
 
       const { signedUrl } = await response.json()
+      
+      // SECURITY FIX: Validate signed URL to prevent open redirect
+      if (!isSupabaseStorageUrl(signedUrl)) {
+        throw new Error("Invalid signed URL")
+      }
       
       if (newWindow) {
         newWindow.location.href = signedUrl

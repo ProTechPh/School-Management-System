@@ -1,13 +1,24 @@
 import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { getClientIp } from "@/lib/security"
+import { handleApiError, ApiErrors } from "@/lib/api-errors"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    // SECURITY FIX: Rate limiting to prevent abuse
+    const ip = getClientIp(request)
+    const isAllowed = await checkRateLimit(ip, "chat-messages", 60, 60 * 1000)
+    
+    if (!isAllowed) {
+      return ApiErrors.rateLimited()
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return ApiErrors.unauthorized()
     }
 
     // Securely fetch messages where the user is either sender or receiver
@@ -24,7 +35,7 @@ export async function GET(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ messages })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    return handleApiError(error, "chat-messages")
   }
 }

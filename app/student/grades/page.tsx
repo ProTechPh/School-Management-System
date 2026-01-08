@@ -13,6 +13,7 @@ import {
   calculateFinalGrade,
   defaultWeights,
 } from "@/lib/grade-utils"
+import { isSafeKey } from "@/lib/utils"
 
 interface Grade {
   id: string
@@ -81,11 +82,14 @@ export default function StudentGradesPage() {
   const typeBreakdown = useMemo(() => {
     const breakdown: Record<string, { count: number; total: number; avg: number }> = {}
     grades.forEach((g) => {
+      // SECURITY FIX: Validate key to prevent prototype pollution
+      if (!isSafeKey(g.type)) return
       if (!breakdown[g.type]) breakdown[g.type] = { count: 0, total: 0, avg: 0 }
       breakdown[g.type].count++
       breakdown[g.type].total += g.percentage
     })
     Object.keys(breakdown).forEach((type) => {
+      if (!isSafeKey(type)) return
       breakdown[type].avg = Math.round(breakdown[type].total / breakdown[type].count)
     })
     return breakdown
