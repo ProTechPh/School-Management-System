@@ -2,3 +2,6 @@ node_modules/
 .kiro/
 .next/
 .env.local
+
+# Kilo Code agent worktrees
+.kilocode/worktrees/

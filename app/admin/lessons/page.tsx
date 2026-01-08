@@ -16,6 +16,7 @@ import {
 import { FileText, Video, LinkIcon, File, Search, Eye, Loader2, ExternalLink } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { getSafeUrl } from "@/lib/utils"
 
 interface LessonMaterial {
   id: string
@@ -212,10 +213,12 @@ export default function AdminLessonsPage() {
                   <div className="space-y-2">
                     {selectedLesson.materials.map((material) => {
                       const Icon = materialIcon[material.type] || File
-                      return material.url ? (
+                      // SECURITY FIX: Validate URL to prevent XSS via javascript: URLs
+                      const safeUrl = getSafeUrl(material.url)
+                      return safeUrl !== '#' ? (
                         <a
                           key={material.id}
-                          href={material.url}
+                          href={safeUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-muted/50 transition-colors cursor-pointer"

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus, FileText, Video, LinkIcon, Upload, Trash2, Eye, Edit, File, Loader2, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
+import { getSafeUrl } from "@/lib/utils"
 
 interface ClassInfo {
   id: string
@@ -447,10 +448,12 @@ export default function TeacherLessonsPage() {
                   <div className="space-y-2">
                     {selectedLesson.materials.map((material) => {
                       const Icon = materialIcon[material.type] || File
-                      return material.url ? (
+                      // SECURITY FIX: Validate URL to prevent XSS via javascript: URLs
+                      const safeUrl = getSafeUrl(material.url)
+                      return safeUrl !== '#' ? (
                         <a
                           key={material.id}
-                          href={material.url}
+                          href={safeUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-muted/50 transition-colors cursor-pointer"

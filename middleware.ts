@@ -2,6 +2,34 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { validateOrigin } from "@/lib/security"
 
+/**
+ * 安全响应头配置
+ * Security headers to protect against common web vulnerabilities
+ */
+const securityHeaders: Record<string, string> = {
+  // 防止点击劫持 - Prevent clickjacking
+  'X-Frame-Options': 'DENY',
+  // 防止 MIME 类型嗅探 - Prevent MIME type sniffing
+  'X-Content-Type-Options': 'nosniff',
+  // 控制 Referrer 信息泄露 - Control Referrer information leakage
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  // 限制浏览器功能 - Restrict browser features
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  // XSS 保护 (legacy browsers) - XSS protection for legacy browsers
+  'X-XSS-Protection': '1; mode=block',
+}
+
+/**
+ * 应用安全头到响应
+ * Apply security headers to response
+ */
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  Object.entries(securityHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value)
+  })
+  return response
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -9,15 +37,19 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  // Apply security headers to all responses
+  response = applySecurityHeaders(response)
+
   // 1. Global CSRF Protection
   if (request.nextUrl.pathname.startsWith("/api/")) {
     const method = request.method.toUpperCase()
     if (["POST", "PUT", "DELETE", "PATCH"].includes(method)) {
       if (!validateOrigin(request)) {
-        return new NextResponse(
+        const errorResponse = new NextResponse(
           JSON.stringify({ error: "Invalid Origin" }),
           { status: 403, headers: { "Content-Type": "application/json" } }
         )
+        return applySecurityHeaders(errorResponse)
       }
     }
   }
@@ -133,12 +165,13 @@ export async function middleware(request: NextRequest) {
   } else if (matchedRule) {
     // No user, but route is protected
     if (isApiRoute) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return applySecurityHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }))
     }
-    return NextResponse.redirect(new URL("/login", request.url))
+    return applySecurityHeaders(NextResponse.redirect(new URL("/login", request.url)))
   }
 
-  return response
+  // Ensure security headers are applied to final response
+  return applySecurityHeaders(response)
 }
 
 export const config = {

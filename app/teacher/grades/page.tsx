@@ -25,6 +25,7 @@ import { Progress } from "@/components/ui/progress"
 import { useGradeWeightsStore, defaultGradeWeights, type GradeWeight } from "@/lib/grade-weights-store"
 import { Slider } from "@/components/ui/slider"
 import { createClient } from "@/lib/supabase/client"
+import { isSafeKey } from "@/lib/utils"
 
 interface ClassData {
   id: string
@@ -61,6 +62,8 @@ function calculateFinalGradeWithWeights(
   const typeAverages: Record<string, { total: number; count: number }> = {}
 
   assessments.forEach((a) => {
+    // SECURITY FIX: Validate key to prevent prototype pollution
+    if (!isSafeKey(a.type)) return
     if (!typeAverages[a.type]) {
       typeAverages[a.type] = { total: 0, count: 0 }
     }
