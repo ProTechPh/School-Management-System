@@ -54,5 +54,12 @@ export function QRCodeGenerator({ data, size = 200 }: QRCodeGeneratorProps) {
     }
   }, [data])
 
-  return <div ref={ref} className="flex items-center justify-center rounded-lg bg-white p-4" />
+  return (
+    <div 
+      ref={ref} 
+      className="flex items-center justify-center rounded-lg bg-white p-4"
+      role="img"
+      aria-label="QR code for attendance check-in. This code updates every 3 seconds for security. Students should scan this code to mark their attendance."
+    />
+  )
 }

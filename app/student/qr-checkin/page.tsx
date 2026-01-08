@@ -1,13 +1,17 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, lazy, Suspense } from "react"
 import { toast } from "sonner"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { QRScanner } from "@/components/qr-scanner"
+import { trackUserAction } from "@/lib/analytics"
+
+// Lazy load QR scanner for better initial bundle size
+const QRScanner = lazy(() => import("@/components/qr-scanner").then(mod => ({ default: mod.QRScanner })))
+
 import { QrCode, Camera, XCircle, Clock, MapPin, Navigation, Loader2, AlertTriangle, CheckCircle2, Info } from "lucide-react"
 import { useSchoolLocationStore } from "@/lib/school-location-store"
 import { createClient } from "@/lib/supabase/client"
@@ -143,6 +147,15 @@ export default function StudentQRCheckinPage() {
 
       setResult({ success: true, message: "Successfully checked in!" })
       toast.success("Check-in successful!")
+      
+      // Track successful check-in
+      if (currentStudent) {
+        trackUserAction('qr_attendance_checkin', currentStudent.id, 'student', {
+          timestamp: new Date().toISOString(),
+          hasLocation: true,
+        })
+      }
+      
       fetchUser() 
     } catch (error: any) {
       setResult({ success: false, message: error.message })
@@ -286,7 +299,11 @@ export default function StudentQRCheckinPage() {
         </Card>
       </div>
 
-      {showScanner && <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />}
+      {showScanner && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
+          <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />
+        </Suspense>
+      )}
     </div>
   )
 }

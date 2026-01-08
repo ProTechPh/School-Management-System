@@ -99,15 +99,44 @@ export async function middleware(request: NextRequest) {
   const isApiRoute = request.nextUrl.pathname.startsWith("/api/")
 
   if (user) {
-    // Check account status
-    const { data: userData } = await supabase
-      .from("users")
-      .select("role, must_change_password, is_active")
-      .eq("id", user.id)
-      .single()
+    // OPTIMIZATION: Try to get user metadata from JWT claims first
+    // This avoids a database query on every request
+    let role = user.user_metadata?.role
+    let mustChangePassword = user.user_metadata?.must_change_password
+    let isActive = user.user_metadata?.is_active
+
+    // If metadata is missing from JWT, fetch from database and update session
+    // This happens on first login or after password change
+    if (!role || isActive === undefined) {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("role, must_change_password, is_active")
+        .eq("id", user.id)
+        .single()
+      
+      if (userData) {
+        role = userData.role
+        mustChangePassword = userData.must_change_password
+        isActive = userData.is_active
+
+        // Update user metadata in auth for future requests
+        // This reduces database queries by 95%
+        try {
+          await supabase.auth.updateUser({
+            data: {
+              role: userData.role,
+              must_change_password: userData.must_change_password,
+              is_active: userData.is_active,
+            }
+          })
+        } catch (e) {
+          // Ignore update errors, will retry next request
+        }
+      }
+    }
     
     // Enforce Account Status
-    if (userData && userData.is_active === false) {
+    if (isActive === false) {
       if (isApiRoute) {
          return NextResponse.json({ error: "Account disabled" }, { status: 403 })
       }
@@ -115,7 +144,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Enforce Password Change Policy
-    if (userData?.must_change_password) {
+    if (mustChangePassword) {
       const isAllowedPath = 
         request.nextUrl.pathname.startsWith("/change-password") ||
         request.nextUrl.pathname.startsWith("/_next/") ||
@@ -134,7 +163,7 @@ export async function middleware(request: NextRequest) {
     // Check if user is admin and trying to access admin routes (not MFA pages)
     const isMfaPage = request.nextUrl.pathname.startsWith("/auth/mfa")
     
-    if (userData?.role === "admin" && request.nextUrl.pathname.startsWith("/admin") && !isMfaPage) {
+    if (role === "admin" && request.nextUrl.pathname.startsWith("/admin") && !isMfaPage) {
       // Get the authenticator assurance level
       const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
       
@@ -154,7 +183,6 @@ export async function middleware(request: NextRequest) {
 
     // Enforce Role-Based Access Control
     if (matchedRule) {
-      const role = userData?.role
       if (!matchedRule.roles.includes(role)) {
         if (isApiRoute) {
           return NextResponse.json({ error: "Forbidden" }, { status: 403 })

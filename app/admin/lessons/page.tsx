@@ -214,7 +214,7 @@ export default function AdminLessonsPage() {
                     {selectedLesson.materials.map((material) => {
                       const Icon = materialIcon[material.type] || File
                       // SECURITY FIX: Validate URL to prevent XSS via javascript: URLs
-                      const safeUrl = getSafeUrl(material.url)
+                      const safeUrl = material.url ? getSafeUrl(material.url) : '#'
                       return safeUrl !== '#' ? (
                         <a
                           key={material.id}

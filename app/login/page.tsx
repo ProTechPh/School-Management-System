@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { GraduationCap, Loader2, Eye, EyeOff } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { trackUserAction } from "@/lib/analytics"
 import Link from "next/link"
 
 const formatLoginEmail = (input: string): string => {
@@ -57,6 +58,14 @@ export default function LoginPage() {
           .select("role, must_change_password")
           .eq("id", user.id)
           .single()
+
+        // Track successful login
+        if (userData?.role) {
+          trackUserAction('login', user.id, userData.role as any, {
+            method: 'password',
+            timestamp: new Date().toISOString(),
+          })
+        }
 
         if (userData?.must_change_password === true) {
           router.push("/change-password")

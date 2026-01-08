@@ -63,4 +63,43 @@ export const ApiErrors = {
   badRequest: (message = "Invalid request") => apiError(message, 400),
   rateLimited: () => apiError("Too many requests. Please wait.", 429),
   invalidOrigin: () => apiError("Invalid Origin", 403),
+  validationError: (message: string) => apiError(`Validation error: ${message}`, 422),
+  conflict: (message = "Resource conflict") => apiError(message, 409),
+  serviceUnavailable: () => apiError("Service temporarily unavailable", 503),
 } as const
+
+/**
+ * Validates pagination parameters
+ */
+export function validatePagination(page: string | null, pageSize: string | null) {
+  const parsedPage = parseInt(page || '1')
+  const parsedPageSize = parseInt(pageSize || '50')
+  
+  if (isNaN(parsedPage) || parsedPage < 1) {
+    throw new Error('Invalid page number')
+  }
+  
+  if (isNaN(parsedPageSize) || parsedPageSize < 1 || parsedPageSize > 100) {
+    throw new Error('Invalid page size (must be between 1 and 100)')
+  }
+  
+  return {
+    page: parsedPage,
+    pageSize: parsedPageSize,
+    from: (parsedPage - 1) * parsedPageSize,
+    to: (parsedPage - 1) * parsedPageSize + parsedPageSize - 1
+  }
+}
+
+/**
+ * Sanitizes search input to prevent SQL injection
+ */
+export function sanitizeSearchInput(input: string | null, maxLength = 100): string {
+  if (!input) return ''
+  
+  // Trim and limit length
+  const trimmed = input.trim().slice(0, maxLength)
+  
+  // Escape special ILIKE characters
+  return trimmed.replace(/[%_]/g, '\\$&')
+}

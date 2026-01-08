@@ -20,7 +20,11 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   initialize: () => Promise<void>
   signOut: () => Promise<void>
+  cleanup: () => void
 }
+
+// OPTIMIZATION: Store subscription reference for cleanup
+let authSubscription: { data: { subscription: { unsubscribe: () => void } } } | null = null
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -34,6 +38,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     if (get().initialized) return
+
+    // OPTIMIZATION: Cleanup existing subscription before creating new one
+    if (authSubscription) {
+      authSubscription.data.subscription.unsubscribe()
+      authSubscription = null
+    }
 
     const supabase = createClient()
     
@@ -51,8 +61,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: null, profile: null, loading: false, initialized: true })
     }
 
-    // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    // OPTIMIZATION: Store subscription reference for cleanup
+    authSubscription = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const { data: profile } = await supabase
           .from("users")
@@ -72,4 +82,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await supabase.auth.signOut()
     set({ user: null, profile: null })
   },
+
+  // OPTIMIZATION: Cleanup method to prevent memory leaks
+  cleanup: () => {
+    if (authSubscription) {
+      authSubscription.data.subscription.unsubscribe()
+      authSubscription = null
+    }
+  }
 }))
