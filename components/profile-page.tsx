@@ -38,6 +38,7 @@ import {
   validateImageFile, 
   AVATAR_DIMENSIONS 
 } from "@/lib/supabase/storage"
+import { UserAuditHistory } from "@/components/user-audit-history"
 
 interface ProfilePageProps {
   role: "admin" | "teacher" | "student"
@@ -909,6 +910,9 @@ export function ProfilePage({ role }: ProfilePageProps) {
               </CardContent>
             </Card>
           )}
+
+          {/* Security Activity / Audit History */}
+          {user && <UserAuditHistory userId={user.id} limit={10} />}
 
           {/* Save Button */}
           <div className="flex justify-end">
