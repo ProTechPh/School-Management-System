@@ -21,6 +21,7 @@ import {
   UserPlus,
   User,
   Menu,
+  Shield,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -52,6 +53,7 @@ const adminLinks = [
   { href: "/admin/schedule", label: "Schedule", icon: Calendar },
   { href: "/admin/chat", label: "Messages", icon: MessageCircle },
   { href: "/admin/ai-assistant", label: "AI Assistant", icon: Bot },
+  { href: "/admin/audit-logs", label: "Audit Logs", icon: Shield },
   { href: "/admin/profile", label: "My Profile", icon: User },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]

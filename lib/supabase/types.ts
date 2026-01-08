@@ -250,3 +250,12 @@ export interface DbSchoolSettings {
   radius_meters: number
   updated_at: string
 }
+
+export interface DbAuditLogEntry {
+  id: string
+  user_id: string | null
+  action: string
+  ip_address: string | null
+  created_at: string
+  payload: any
+}
