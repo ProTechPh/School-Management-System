@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { useDebounce } from "use-debounce"
 import { toast } from "sonner"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Button } from "@/components/ui/button"
@@ -150,15 +151,26 @@ export default function ClassesPage() {
     setLoading(false)
   }
 
+  // Debounce search query to reduce re-renders during typing
+  const [debouncedSearch] = useDebounce(searchQuery, 300)
+
   const subjects = [...new Set(classes.map((c) => c.subject))]
 
-  const filteredClasses = classes.filter((cls) => {
-    const matchesSearch =
-      cls.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (cls.teacher_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
-    const matchesSubject = filterSubject === "all" || cls.subject === filterSubject
-    return matchesSearch && matchesSubject
-  })
+  // Memoize filtered results to prevent unnecessary recalculations
+  const filteredClasses = useMemo(() => {
+    // Early return if no filters applied
+    if (!debouncedSearch && filterSubject === "all") {
+      return classes
+    }
+
+    return classes.filter((cls) => {
+      const matchesSearch = !debouncedSearch || 
+        cls.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        (cls.teacher_name?.toLowerCase().includes(debouncedSearch.toLowerCase()) ?? false)
+      const matchesSubject = filterSubject === "all" || cls.subject === filterSubject
+      return matchesSearch && matchesSubject
+    })
+  }, [classes, debouncedSearch, filterSubject])
 
   const resetForm = () => {
     setFormData({ name: "", grade: "10", section: "A", subject: "", teacher_id: "", room: "", scheduleDays: "MWF", scheduleTime: "9:00 AM" })

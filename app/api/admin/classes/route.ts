@@ -31,31 +31,37 @@ export async function GET(request: NextRequest) {
       return ApiErrors.forbidden()
     }
 
-    // Fetch classes
-    const { data: classData, error: classError } = await supabase
+    // OPTIMIZATION: Add pagination support
+    const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const pageSize = parseInt(searchParams.get('pageSize') || '50')
+    const search = searchParams.get('search') || ''
+    
+    const from = (page - 1) * pageSize
+    const to = from + pageSize - 1
+
+    // OPTIMIZATION: Use aggregation to get student counts in single query
+    let query = supabase
       .from("classes")
       .select(`
         id, name, grade, section, subject, room, schedule, teacher_id,
-        teacher:users!classes_teacher_id_fkey (name)
-      `)
+        teacher:users!classes_teacher_id_fkey (name),
+        enrollments:class_students(count)
+      `, { count: 'exact' })
       .order("name")
+      .range(from, to)
+
+    // Add search filter if provided
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,subject.ilike.%${search}%`)
+    }
+
+    const { data: classData, error: classError, count } = await query
 
     if (classError) throw classError
 
-    // Fetch student counts
-    const { data: enrollments, error: enrollError } = await supabase
-      .from("class_students")
-      .select("class_id")
-
-    if (enrollError) throw enrollError
-
-    const countMap: Record<string, number> = {}
-    enrollments?.forEach((e: any) => {
-      countMap[e.class_id] = (countMap[e.class_id] || 0) + 1
-    })
-
-    // SECURITY FIX: DTO Pattern
-    const safeClasses = classData.map((c: any) => ({
+    // SECURITY FIX: DTO Pattern - transform data
+    const safeClasses = classData?.map((c: any) => ({
       id: c.id,
       name: c.name,
       grade: c.grade,
@@ -65,10 +71,18 @@ export async function GET(request: NextRequest) {
       schedule: c.schedule,
       teacher_id: c.teacher_id,
       teacher_name: c.teacher?.name || null,
-      student_count: countMap[c.id] || 0
-    }))
+      student_count: c.enrollments?.[0]?.count || 0
+    })) || []
 
-    return NextResponse.json({ classes: safeClasses })
+    return NextResponse.json({ 
+      classes: safeClasses,
+      pagination: {
+        page,
+        pageSize,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / pageSize)
+      }
+    })
   } catch (error) {
     return handleApiError(error, "admin-list-classes")
   }

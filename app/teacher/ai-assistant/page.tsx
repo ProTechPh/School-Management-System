@@ -1,10 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, lazy, Suspense } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
-import { AIChat } from "@/components/ai-chat"
 import { createClient } from "@/lib/supabase/client"
 import { Loader2 } from "lucide-react"
+
+// Lazy load AI Chat for better initial bundle size
+const AIChat = lazy(() => import("@/components/ai-chat").then(mod => ({ default: mod.AIChat })))
 
 export default function TeacherAIAssistantPage() {
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null)
@@ -42,7 +44,9 @@ export default function TeacherAIAssistantPage() {
         subtitle="Get help with lesson planning and teaching"
         userId={currentUser?.id}
       />
-      <AIChat userRole="teacher" userName={currentUser?.name || "Teacher"} />
+      <Suspense fallback={<div className="flex items-center justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+        <AIChat userRole="teacher" userName={currentUser?.name || "Teacher"} />
+      </Suspense>
     </div>
   )
 }

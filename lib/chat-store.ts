@@ -20,6 +20,10 @@ export interface ChatMessage {
 
 interface ChatStore {
   messages: ChatMessage[]
+  // Memoization cache for expensive calculations
+  _conversationCache: Map<string, ChatMessage[]>
+  _conversationsCache: Map<string, any[]>
+  _cacheTimestamp: number
   sendMessage: (message: Omit<ChatMessage, "id" | "createdAt" | "read">) => void
   markAsRead: (messageId: string) => void
   markConversationAsRead: (userId: string, otherUserId: string) => void
@@ -37,10 +41,22 @@ interface ChatStore {
     unreadCount: number
   }[]
   getUnreadCount: (userId: string) => number
+  _invalidateCache: () => void
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
+  _conversationCache: new Map(),
+  _conversationsCache: new Map(),
+  _cacheTimestamp: Date.now(),
+
+  _invalidateCache: () => {
+    set({
+      _conversationCache: new Map(),
+      _conversationsCache: new Map(),
+      _cacheTimestamp: Date.now(),
+    })
+  },
 
   sendMessage: (message) => {
     const newMessage: ChatMessage = {
@@ -52,12 +68,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set((state) => ({
       messages: [...state.messages, newMessage],
     }))
+    get()._invalidateCache()
   },
 
   markAsRead: (messageId) => {
     set((state) => ({
       messages: state.messages.map((m) => (m.id === messageId ? { ...m, read: true } : m)),
     }))
+    get()._invalidateCache()
   },
 
   markConversationAsRead: (userId, otherUserId) => {
@@ -66,20 +84,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         m.receiverId === userId && m.senderId === otherUserId ? { ...m, read: true } : m,
       ),
     }))
+    get()._invalidateCache()
   },
 
   getConversation: (userId, otherUserId) => {
+    const cacheKey = `${userId}-${otherUserId}`
+    const cached = get()._conversationCache.get(cacheKey)
+    
+    if (cached) {
+      return cached
+    }
+
     const { messages } = get()
-    return messages
+    const result = messages
       .filter(
         (m) =>
           (m.senderId === userId && m.receiverId === otherUserId) ||
           (m.senderId === otherUserId && m.receiverId === userId),
       )
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    
+    // Cache the result
+    get()._conversationCache.set(cacheKey, result)
+    return result
   },
 
   getConversations: (userId, userRole) => {
+    const cacheKey = `${userId}-${userRole}`
+    const cached = get()._conversationsCache.get(cacheKey)
+    
+    if (cached) {
+      return cached
+    }
+
     const { messages } = get()
     const conversationMap = new Map<
       string,
@@ -136,9 +173,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
     })
 
-    return Array.from(conversationMap.values()).sort(
+    const result = Array.from(conversationMap.values()).sort(
       (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
     )
+    
+    // Cache the result
+    get()._conversationsCache.set(cacheKey, result)
+    return result
   },
 
   getUnreadCount: (userId) => {

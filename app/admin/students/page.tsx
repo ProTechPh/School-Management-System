@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { useDebounce } from "use-debounce"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
@@ -43,6 +44,8 @@ export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  // OPTIMIZATION: Debounce search to reduce re-renders
+  const [debouncedSearch] = useDebounce(searchQuery, 300)
   const [filterGrade, setFilterGrade] = useState<string>("all")
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -94,14 +97,27 @@ export default function StudentsPage() {
     }
   }
 
-  const filteredStudents = students.filter((student) => {
-    const matchesSearch =
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (student.lrn && student.lrn.includes(searchQuery))
-    const matchesGrade = filterGrade === "all" || student.grade === filterGrade
-    return matchesSearch && matchesGrade
-  })
+  // OPTIMIZATION: Use useMemo and debounced search to reduce filtering operations
+  const filteredStudents = useMemo(() => {
+    const lowerSearch = debouncedSearch.toLowerCase()
+    
+    return students.filter((student) => {
+      // Early return for grade filter
+      if (filterGrade !== "all" && student.grade !== filterGrade) {
+        return false
+      }
+      
+      // If no search query, return all (after grade filter)
+      if (!debouncedSearch) return true
+      
+      // Search in name, email, or LRN
+      return (
+        student.name.toLowerCase().includes(lowerSearch) ||
+        student.email.toLowerCase().includes(lowerSearch) ||
+        student.lrn?.includes(debouncedSearch)
+      )
+    })
+  }, [students, debouncedSearch, filterGrade])
 
   const getGradeCount = (grade: string) => students.filter((s) => s.grade === grade).length
 

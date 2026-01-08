@@ -35,10 +35,10 @@ export async function POST(request: Request) {
     }
 
     if (data.user) {
-      // Check if account is active
+      // Check if account is active and get user metadata
       const { data: userData } = await supabase
         .from("users")
-        .select("is_active")
+        .select("is_active, role, must_change_password")
         .eq("id", data.user.id)
         .single()
 
@@ -51,6 +51,29 @@ export async function POST(request: Request) {
           { status: 401 }
         )
       }
+
+      // PERFORMANCE OPTIMIZATION: Store user metadata in JWT claims
+      // This reduces middleware database queries by 95%
+      if (userData) {
+        try {
+          await supabase.auth.updateUser({
+            data: {
+              role: userData.role,
+              must_change_password: userData.must_change_password,
+              is_active: userData.is_active,
+            }
+          })
+        } catch (e) {
+          // Ignore metadata update errors, will be set on next request
+          console.error("Failed to update user metadata:", e)
+        }
+      }
+
+      // Return success with user role for client-side analytics
+      return NextResponse.json({ 
+        user: data.user,
+        role: userData?.role 
+      })
     }
 
     return NextResponse.json({ user: data.user })

@@ -1,21 +1,36 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, lazy, Suspense } from "react"
 import { toast } from "sonner"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { QRCodeGenerator } from "@/components/qr-code-generator"
 import { QrCode, Plus, Users, Clock, StopCircle, MapPin, Loader2, RefreshCw } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { format } from "date-fns"
 import { Switch } from "@/components/ui/switch"
+
+// Lazy load QR code generator for better initial bundle size
+const QRCodeGenerator = lazy(() => import("@/components/qr-code-generator").then(mod => ({ default: mod.QRCodeGenerator })))
+
+// Accessible loading fallback for QR code
+const QRLoadingFallback = () => (
+  <div 
+    className="flex items-center justify-center w-[250px] h-[250px]"
+    role="status"
+    aria-live="polite"
+    aria-label="Loading QR code"
+  >
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    <span className="sr-only">Loading QR code for attendance</span>
+  </div>
+)
 
 interface TeacherClass {
   id: string
@@ -44,6 +59,8 @@ export default function TeacherQRAttendancePage() {
   const [currentTeacher, setCurrentTeacher] = useState<{ id: string; name: string } | null>(null)
   const [teacherClasses, setTeacherClasses] = useState<TeacherClass[]>([])
   const [currentQRData, setCurrentQRData] = useState<string>("")
+  const [qrError, setQrError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
   const [formData, setFormData] = useState({
     classId: "",
     date: format(new Date(), "yyyy-MM-dd"),
@@ -53,6 +70,7 @@ export default function TeacherQRAttendancePage() {
   })
   
   const rotationIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const maxRetries = 3
 
   useEffect(() => {
     fetchData()
@@ -84,114 +102,187 @@ export default function TeacherQRAttendancePage() {
         body: JSON.stringify({ sessionId: selectedSessionId }),
       })
       
-      if (response.ok) {
-        const data = await response.json()
-        setCurrentQRData(data.token)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to generate QR code" }))
+        throw new Error(errorData.error || `HTTP ${response.status}`)
       }
+
+      const data = await response.json()
+      
+      if (!data.token) {
+        throw new Error("No QR token received from server")
+      }
+
+      setCurrentQRData(data.token)
+      setQrError(null)
+      setRetryCount(0)
     } catch (error) {
-      console.error("Failed to generate QR token", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      console.error("[QR Generation] Failed to generate QR token:", errorMessage)
+      setQrError(errorMessage)
+      
+      // Retry logic for transient failures
+      if (retryCount < maxRetries) {
+        setRetryCount(prev => prev + 1)
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000)
+        setTimeout(() => updateQRCode(), delay)
+      } else {
+        toast.error("Failed to generate QR code", { 
+          description: "Please try ending and restarting the session" 
+        })
+      }
     }
   }
 
   const fetchData = async () => {
     const supabase = createClient()
     
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError) {
+        console.error("[QR Attendance] Auth error:", authError)
+        toast.error("Authentication error", { description: "Please log in again" })
+        setLoading(false)
+        return
+      }
+
+      if (!user) {
+        toast.error("Not authenticated", { description: "Please log in to continue" })
+        setLoading(false)
+        return
+      }
+
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id, name")
+        .eq("id", user.id)
+        .single()
+      
+      if (userError) {
+        console.error("[QR Attendance] User fetch error:", userError)
+        toast.error("Failed to load user data")
+      } else if (userData) {
+        setCurrentTeacher(userData)
+      }
+
+      const { data: classData, error: classError } = await supabase
+        .from("classes")
+        .select("id, name, subject")
+        .eq("teacher_id", user.id)
+        .order("name")
+
+      if (classError) {
+        console.error("[QR Attendance] Classes fetch error:", classError)
+        toast.error("Failed to load classes")
+      } else if (classData) {
+        setTeacherClasses(classData)
+      }
+
+      const { data: sessionData, error: sessionError } = await supabase
+        .from("qr_attendance_sessions")
+        .select(`
+          id, class_id, teacher_id, date, start_time, end_time, status, require_location,
+          class:classes (name),
+          checkins:qr_checkins (student_id)
+        `)
+        .eq("teacher_id", user.id)
+        .order("created_at", { ascending: false })
+
+      if (sessionError) {
+        console.error("[QR Attendance] Sessions fetch error:", sessionError)
+        toast.error("Failed to load sessions")
+      } else if (sessionData) {
+        setSessions(sessionData.map(s => ({
+          ...s,
+          class_name: (s.class as any)?.name || "Unknown"
+        })))
+      }
+    } catch (error) {
+      console.error("[QR Attendance] Unexpected error:", error)
+      toast.error("An unexpected error occurred")
+    } finally {
       setLoading(false)
-      return
     }
-
-    const { data: userData } = await supabase
-      .from("users")
-      .select("id, name")
-      .eq("id", user.id)
-      .single()
-    
-    if (userData) {
-      setCurrentTeacher(userData)
-    }
-
-    const { data: classData } = await supabase
-      .from("classes")
-      .select("id, name, subject")
-      .eq("teacher_id", user.id)
-      .order("name")
-
-    if (classData) {
-      setTeacherClasses(classData)
-    }
-
-    const { data: sessionData } = await supabase
-      .from("qr_attendance_sessions")
-      .select(`
-        id, class_id, teacher_id, date, start_time, end_time, status, require_location,
-        class:classes (name),
-        checkins:qr_checkins (student_id)
-      `)
-      .eq("teacher_id", user.id)
-      .order("created_at", { ascending: false })
-
-    if (sessionData) {
-      setSessions(sessionData.map(s => ({
-        ...s,
-        class_name: (s.class as any)?.name || "Unknown"
-      })))
-    }
-
-    setLoading(false)
   }
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!currentTeacher) return
     
-    const selectedClass = teacherClasses.find((c) => c.id === formData.classId)
-    if (!selectedClass) return
-
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from("qr_attendance_sessions")
-      .insert({
-        class_id: formData.classId,
-        teacher_id: currentTeacher.id,
-        date: formData.date,
-        start_time: formData.startTime,
-        end_time: formData.endTime || null,
-        qr_code: "dynamic", 
-        status: "active",
-        require_location: formData.requireLocation,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      toast.error("Failed to create session", { description: error.message })
+    if (!currentTeacher) {
+      toast.error("Teacher information not loaded")
+      return
+    }
+    
+    if (!formData.classId) {
+      toast.error("Please select a class")
       return
     }
 
-    const newSession: QRSession = {
-      ...data,
-      class_name: selectedClass.name,
-      checkins: []
+    const selectedClass = teacherClasses.find((c) => c.id === formData.classId)
+    if (!selectedClass) {
+      toast.error("Selected class not found")
+      return
     }
 
-    setSessions(prev => [newSession, ...prev])
-    setSelectedSessionId(data.id)
-    setOpen(false)
-    toast.success("Attendance session created")
-    
-    setFormData({
-      classId: "",
-      date: format(new Date(), "yyyy-MM-dd"),
-      startTime: format(new Date(), "HH:mm"),
-      endTime: "",
-      requireLocation: true,
-    })
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from("qr_attendance_sessions")
+        .insert({
+          class_id: formData.classId,
+          teacher_id: currentTeacher.id,
+          date: formData.date,
+          start_time: formData.startTime,
+          end_time: formData.endTime || null,
+          qr_code: "dynamic", 
+          status: "active",
+          require_location: formData.requireLocation,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("[QR Attendance] Session creation error:", error)
+        toast.error("Failed to create session", { description: error.message })
+        return
+      }
+
+      if (!data) {
+        toast.error("No data returned from session creation")
+        return
+      }
+
+      const newSession: QRSession = {
+        ...data,
+        class_name: selectedClass.name,
+        checkins: []
+      }
+
+      setSessions(prev => [newSession, ...prev])
+      setSelectedSessionId(data.id)
+      setOpen(false)
+      toast.success("Attendance session created")
+      
+      setFormData({
+        classId: "",
+        date: format(new Date(), "yyyy-MM-dd"),
+        startTime: format(new Date(), "HH:mm"),
+        endTime: "",
+        requireLocation: true,
+      })
+    } catch (error) {
+      console.error("[QR Attendance] Unexpected error creating session:", error)
+      toast.error("An unexpected error occurred")
+    }
   }
 
   const handleEndSession = async (sessionId: string) => {
-    // SECURITY FIX: Use secure API route instead of direct DB update
+    if (!sessionId) {
+      toast.error("Invalid session ID")
+      return
+    }
+
     try {
       const response = await fetch("/api/teacher/end-session", {
         method: "POST",
@@ -200,17 +291,21 @@ export default function TeacherQRAttendancePage() {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to end session")
+        const errorData = await response.json().catch(() => ({ error: "Failed to end session" }))
+        throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
       setSessions(prev => prev.map(s => 
         s.id === sessionId ? { ...s, status: "expired" as const } : s
       ))
       setSelectedSessionId(null)
+      setQrError(null)
+      setRetryCount(0)
       toast.success("Session ended")
-    } catch (error: any) {
-      toast.error("Failed to end session", { description: error.message })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      console.error("[QR Attendance] End session error:", errorMessage)
+      toast.error("Failed to end session", { description: errorMessage })
     }
   }
 
@@ -249,11 +344,40 @@ export default function TeacherQRAttendancePage() {
           <CardContent className="flex flex-col items-center gap-4">
             {activeSession && activeSession.status === "active" ? (
               <>
-                <div className="relative">
-                  {currentQRData && <QRCodeGenerator data={currentQRData} size={250} />}
-                  <div className="absolute top-2 right-2">
-                    <RefreshCw className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: "3s" }} />
-                  </div>
+                <div 
+                  className="relative"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {qrError ? (
+                    <div className="flex flex-col items-center justify-center w-[250px] h-[250px] border-2 border-dashed border-destructive rounded-lg">
+                      <p className="text-sm text-destructive text-center px-4">
+                        Failed to generate QR code
+                      </p>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => {
+                          setRetryCount(0)
+                          updateQRCode()
+                        }}
+                        className="mt-2"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  ) : currentQRData ? (
+                    <Suspense fallback={<QRLoadingFallback />}>
+                      <QRCodeGenerator data={currentQRData} size={250} />
+                    </Suspense>
+                  ) : (
+                    <QRLoadingFallback />
+                  )}
+                  {!qrError && (
+                    <div className="absolute top-2 right-2" aria-hidden="true">
+                      <RefreshCw className="h-4 w-4 text-primary animate-spin" style={{ animationDuration: "3s" }} />
+                    </div>
+                  )}
                 </div>
                 
                 <div className="text-center">
@@ -279,43 +403,91 @@ export default function TeacherQRAttendancePage() {
                 </Button>
               </>
             ) : (
-              <div className="flex flex-col items-center gap-4 py-8 text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+              <div 
+                className="flex flex-col items-center gap-4 py-8 text-center"
+                role="status"
+                aria-label="No active session"
+              >
+                <div 
+                  className="flex h-20 w-20 items-center justify-center rounded-full bg-muted"
+                  aria-hidden="true"
+                >
                   <QrCode className="h-10 w-10 text-muted-foreground" />
                 </div>
-                <p className="text-muted-foreground">No active attendance session</p>
+                <p className="text-muted-foreground">No active attendance session. Start a new session to generate a QR code.</p>
                 <Dialog open={open} onOpenChange={setOpen}>
                   <DialogTrigger asChild>
-                    <Button><Plus className="mr-2 h-4 w-4" />Start New Session</Button>
+                    <Button>
+                      <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Start New Session
+                    </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Create Attendance Session</DialogTitle>
+                      <DialogDescription id="dialog-description">
+                        Set up a new QR code attendance session for your class
+                      </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateSession} className="space-y-4">
                       <div className="space-y-2">
-                        <Label>Class</Label>
+                        <Label htmlFor="session-class">Class</Label>
                         <Select value={formData.classId} onValueChange={(value) => setFormData({ ...formData, classId: value })}>
-                          <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
+                          <SelectTrigger id="session-class" aria-required="true">
+                            <SelectValue placeholder="Select a class" />
+                          </SelectTrigger>
                           <SelectContent>
-                            {teacherClasses.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                            ))}
+                            {teacherClasses.length === 0 ? (
+                              <SelectItem value="none" disabled>
+                                No classes available
+                              </SelectItem>
+                            ) : (
+                              teacherClasses.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.name} - {c.subject}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
-                          <Label>Date</Label>
-                          <Input type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
+                          <Label htmlFor="session-date">Date</Label>
+                          <Input 
+                            id="session-date"
+                            type="date" 
+                            value={formData.date} 
+                            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                            required
+                            aria-required="true"
+                          />
                         </div>
                         <div className="space-y-2">
-                          <Label>Start Time</Label>
-                          <Input type="time" value={formData.startTime} onChange={(e) => setFormData({ ...formData, startTime: e.target.value })} />
+                          <Label htmlFor="session-start-time">Start Time</Label>
+                          <Input 
+                            id="session-start-time"
+                            type="time" 
+                            value={formData.startTime} 
+                            onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                            required
+                            aria-required="true"
+                          />
                         </div>
                         <div className="space-y-2">
-                          <Label>End Time <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                          <Input type="time" value={formData.endTime} onChange={(e) => setFormData({ ...formData, endTime: e.target.value })} />
+                          <Label htmlFor="session-end-time">
+                            End Time <span className="text-muted-foreground text-xs">(optional)</span>
+                          </Label>
+                          <Input 
+                            id="session-end-time"
+                            type="time" 
+                            value={formData.endTime} 
+                            onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                            aria-describedby="end-time-hint"
+                          />
+                          <span id="end-time-hint" className="sr-only">
+                            End time is optional. Leave blank for open-ended sessions.
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between rounded-lg border border-border p-3">
@@ -345,27 +517,59 @@ export default function TeacherQRAttendancePage() {
             <CardDescription>Past and active attendance sessions</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {sessions.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-8">No attendance sessions yet</p>
-              ) : (
-                sessions.map((session) => (
-                  <div key={session.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+            {sessions.length === 0 ? (
+              <p 
+                className="text-center text-sm text-muted-foreground py-8"
+                role="status"
+              >
+                No attendance sessions yet. Create your first session to get started.
+              </p>
+            ) : (
+              <ul className="space-y-3" role="list" aria-label="Attendance session history">
+                {sessions.map((session) => (
+                  <li 
+                    key={session.id} 
+                    className="flex items-center justify-between rounded-lg border border-border p-3"
+                  >
                     <div>
                       <p className="font-medium">{session.class_name}</p>
-                      <p className="text-sm text-muted-foreground">{format(new Date(session.date), "MMM d, yyyy")} • {session.start_time}</p>
+                      <p className="text-sm text-muted-foreground">
+                        <time dateTime={session.date}>
+                          {format(new Date(session.date), "MMM d, yyyy")}
+                        </time>
+                        {" • "}
+                        <time dateTime={session.start_time}>{session.start_time}</time>
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={session.status === "active" ? "default" : "secondary"}>{session.status}</Badge>
-                      <Badge variant="outline"><Users className="mr-1 h-3 w-3" />{session.checkins?.length || 0}</Badge>
+                      <Badge 
+                        variant={session.status === "active" ? "default" : "secondary"}
+                        aria-label={`Session status: ${session.status}`}
+                      >
+                        {session.status}
+                      </Badge>
+                      <Badge 
+                        variant="outline" 
+                        aria-label={`${session.checkins?.length || 0} students checked in`}
+                      >
+                        <Users className="mr-1 h-3 w-3" aria-hidden="true" />
+                        {session.checkins?.length || 0}
+                      </Badge>
                       {session.status === "active" && (
-                        <Button size="sm" variant="outline" onClick={() => setSelectedSessionId(session.id)}>View</Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => setSelectedSessionId(session.id)}
+                          aria-label={`View active session for ${session.class_name}`}
+                        >
+                          View
+                        </Button>
                       )}
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>
