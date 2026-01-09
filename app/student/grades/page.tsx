@@ -129,7 +129,7 @@ export default function StudentGradesPage() {
               </div>
               <div className="flex gap-6">
                 {defaultWeights.map((w) => {
-                  const data = typeBreakdown[w.type]
+                  const data = typeBreakdown.get(w.type)
                   return (
                     <div key={w.type} className="text-center">
                       <p className="text-xs text-muted-foreground capitalize">{w.type}</p>
