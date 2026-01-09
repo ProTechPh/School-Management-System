@@ -165,6 +165,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error("Submit quiz error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Failed to submit quiz. Please try again." }, { status: 500 })
   }
 }

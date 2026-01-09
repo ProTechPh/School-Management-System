@@ -66,14 +66,16 @@ export async function POST(request: NextRequest) {
       generatedPassword = password
     }
 
-    // Enforce Password Complexity
-    const hasMinLength = password && password.length >= 8
+    // Enforce Strong Password Complexity
+    const hasMinLength = password && password.length >= 12
     const hasNumber = /\d/.test(password)
     const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    const hasUpperCase = /[A-Z]/.test(password)
+    const hasLowerCase = /[a-z]/.test(password)
 
-    if (!hasMinLength || !hasNumber || !hasSpecial) {
+    if (!hasMinLength || !hasNumber || !hasSpecial || !hasUpperCase || !hasLowerCase) {
       return NextResponse.json({ 
-        error: "Password is too weak. Must be at least 8 characters long and contain a number and a special character." 
+        error: "Password must be at least 12 characters and contain uppercase, lowercase, number, and special character." 
       }, { status: 400 })
     }
 

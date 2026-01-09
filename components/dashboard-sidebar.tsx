@@ -15,7 +15,6 @@ import {
   FileText,
   Megaphone,
   MessageCircle,
-  Bot,
   QrCode,
   Settings,
   UserPlus,
@@ -52,7 +51,6 @@ const adminLinks = [
   { href: "/admin/calendar", label: "Calendar", icon: Calendar },
   { href: "/admin/schedule", label: "Schedule", icon: Calendar },
   { href: "/admin/chat", label: "Messages", icon: MessageCircle },
-  { href: "/admin/ai-assistant", label: "AI Assistant", icon: Bot },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: Shield },
   { href: "/admin/profile", label: "My Profile", icon: User },
   { href: "/admin/settings", label: "Settings", icon: Settings },
@@ -72,7 +70,6 @@ const teacherLinks = [
   { href: "/teacher/calendar", label: "Calendar", icon: Calendar },
   { href: "/teacher/schedule", label: "Schedule", icon: Calendar },
   { href: "/teacher/chat", label: "Messages", icon: MessageCircle },
-  { href: "/teacher/ai-assistant", label: "AI Assistant", icon: Bot },
   { href: "/teacher/profile", label: "My Profile", icon: User },
 ]
 
@@ -90,7 +87,6 @@ const studentLinks = [
   { href: "/student/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/student/qr-checkin", label: "QR Check-in", icon: QrCode },
   { href: "/student/chat", label: "Messages", icon: MessageCircle },
-  { href: "/student/ai-assistant", label: "AI Assistant", icon: Bot },
   { href: "/student/profile", label: "My Profile", icon: User },
 ]
 

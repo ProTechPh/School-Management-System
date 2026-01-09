@@ -16,8 +16,7 @@ import {
   QrCode,
   MessageSquare,
   Shield,
-  ArrowRight,
-  Sparkles
+  ArrowRight
 } from "lucide-react"
 
 export default function HomePage() {
@@ -92,9 +91,9 @@ export default function HomePage() {
       bg: "bg-rose-400/10"
     },
     {
-      icon: Sparkles,
-      title: "AI Assistant",
-      description: "Mira AI helps with educational queries",
+      icon: Shield,
+      title: "Secure Platform",
+      description: "Enterprise-grade security and data protection",
       color: "text-cyan-400",
       bg: "bg-cyan-400/10"
     }
@@ -104,7 +103,7 @@ export default function HomePage() {
     { value: "4", label: "User Roles" },
     { value: "15+", label: "Features" },
     { value: "QR", label: "Check-in" },
-    { value: "AI", label: "Powered" }
+    { value: "RLS", label: "Security" }
   ]
 
   return (

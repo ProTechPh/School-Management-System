@@ -35,6 +35,6 @@ export async function GET(request: Request) {
     return NextResponse.json(stats)
   } catch (error: any) {
     console.error("Audit Log Stats API Error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch audit statistics." }, { status: 500 })
   }
 }
