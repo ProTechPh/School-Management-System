@@ -80,18 +80,22 @@ export default function StudentGradesPage() {
   }, {} as Record<string, Grade[]>)
 
   const typeBreakdown = useMemo(() => {
-    const breakdown: Record<string, { count: number; total: number; avg: number }> = {}
+    // SECURITY FIX: Use Map instead of plain object to prevent prototype pollution
+    const breakdown = new Map<string, { count: number; total: number; avg: number }>()
+    
     grades.forEach((g) => {
-      // SECURITY FIX: Validate key to prevent prototype pollution
       if (!isSafeKey(g.type)) return
-      if (!breakdown[g.type]) breakdown[g.type] = { count: 0, total: 0, avg: 0 }
-      breakdown[g.type].count++
-      breakdown[g.type].total += g.percentage
+      
+      const existing = breakdown.get(g.type) || { count: 0, total: 0, avg: 0 }
+      existing.count++
+      existing.total += g.percentage
+      breakdown.set(g.type, existing)
     })
-    Object.keys(breakdown).forEach((type) => {
-      if (!isSafeKey(type)) return
-      breakdown[type].avg = Math.round(breakdown[type].total / breakdown[type].count)
+    
+    breakdown.forEach((value, type) => {
+      value.avg = Math.round(value.total / value.count)
     })
+    
     return breakdown
   }, [grades])
 

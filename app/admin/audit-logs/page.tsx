@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import DOMPurify from "isomorphic-dompurify"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { AuditLogTable } from "@/components/audit-log-table"
 import { AuditLogFilters } from "@/components/audit-log-filters"
@@ -317,7 +318,7 @@ export default function AuditLogsPage() {
                   {selectedLog.ip_address || "N/A"}
                 </p>
               </div>
-              {selectedLog.payload && (
+              {selectedLog.payload && Object.keys(selectedLog.payload).length > 0 && (
                 <div>
                   <p className="text-sm font-medium">Additional Data</p>
                   <pre className="text-xs bg-muted p-2 rounded mt-1 overflow-auto max-h-40">
