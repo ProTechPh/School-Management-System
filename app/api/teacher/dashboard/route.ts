@@ -123,6 +123,6 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     console.error("Teacher Dashboard API Error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Failed to load dashboard data." }, { status: 500 })
   }
 }

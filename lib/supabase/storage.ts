@@ -2,7 +2,7 @@ import { createClient } from "./client"
 
 export const AVATAR_BUCKET = "avatars"
 export const MAX_AVATAR_SIZE = 5 * 1024 * 1024 // 5MB
-export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 export const AVATAR_DIMENSIONS = { width: 256, height: 256 }
 
 // For lesson materials, we assume a 'materials' bucket exists and is PRIVATE
@@ -60,7 +60,6 @@ export async function uploadAvatar(
   const mimeToExt: Record<string, string> = {
     "image/jpeg": "jpg",
     "image/png": "png",
-    "image/gif": "gif",
     "image/webp": "webp"
   }
   
