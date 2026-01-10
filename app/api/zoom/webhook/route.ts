@@ -41,6 +41,13 @@ export async function POST(request: NextRequest) {
     })
   }
 
+  // Log incoming webhook for debugging
+  console.log("Zoom webhook received:", {
+    event: event.event,
+    meetingId: event.payload?.object?.id,
+    participant: event.payload?.object?.participant,
+  })
+
   // Verify webhook signature for all other events
   const signature = request.headers.get("x-zm-signature")
   const timestamp = request.headers.get("x-zm-request-timestamp")
@@ -53,7 +60,7 @@ export async function POST(request: NextRequest) {
       .digest("hex")}`
 
     if (signature !== expectedSignature) {
-      console.error("Invalid webhook signature")
+      console.error("Invalid webhook signature", { signature, expectedSignature })
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
   }
@@ -61,16 +68,21 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const meetingId = event.payload?.object?.id?.toString()
 
+  console.log("Looking for meeting with zoom_meeting_id:", meetingId)
+
   if (!meetingId) {
+    console.log("No meeting ID in webhook payload")
     return NextResponse.json({ received: true })
   }
 
   // Find meeting in our database
-  const { data: meeting } = await supabase
+  const { data: meeting, error: meetingError } = await supabase
     .from("zoom_meetings")
     .select("id")
     .eq("zoom_meeting_id", meetingId)
     .single()
+
+  console.log("Meeting lookup result:", { meeting, error: meetingError })
 
   if (!meeting) {
     console.log(`Meeting ${meetingId} not found in database`)
