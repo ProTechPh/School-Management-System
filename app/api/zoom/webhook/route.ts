@@ -13,11 +13,38 @@ import crypto from "crypto"
  */
 export async function POST(request: NextRequest) {
   const body = await request.text()
+  const webhookSecret = process.env.ZOOM_WEBHOOK_SECRET
+  
+  let event: { event: string; payload?: { plainToken?: string; object?: { id?: string | number; participant?: { user_id?: string; user_name?: string; email?: string; join_time?: string; leave_time?: string } } } }
+  
+  try {
+    event = JSON.parse(body)
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+  }
+
+  // Handle URL validation challenge FIRST (before signature check)
+  if (event.event === "endpoint.url_validation") {
+    const plainToken = event.payload?.plainToken
+    if (!plainToken) {
+      return NextResponse.json({ error: "Missing plainToken" }, { status: 400 })
+    }
+    
+    const hashForValidation = crypto
+      .createHmac("sha256", webhookSecret || "")
+      .update(plainToken)
+      .digest("hex")
+
+    return NextResponse.json({
+      plainToken: plainToken,
+      encryptedToken: hashForValidation,
+    })
+  }
+
+  // Verify webhook signature for all other events
   const signature = request.headers.get("x-zm-signature")
   const timestamp = request.headers.get("x-zm-request-timestamp")
-
-  // Verify webhook signature
-  const webhookSecret = process.env.ZOOM_WEBHOOK_SECRET
+  
   if (webhookSecret && signature && timestamp) {
     const message = `v0:${timestamp}:${body}`
     const expectedSignature = `v0=${crypto
@@ -29,21 +56,6 @@ export async function POST(request: NextRequest) {
       console.error("Invalid webhook signature")
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
-  }
-
-  const event = JSON.parse(body)
-
-  // Handle URL validation challenge
-  if (event.event === "endpoint.url_validation") {
-    const hashForValidation = crypto
-      .createHmac("sha256", webhookSecret || "")
-      .update(event.payload.plainToken)
-      .digest("hex")
-
-    return NextResponse.json({
-      plainToken: event.payload.plainToken,
-      encryptedToken: hashForValidation,
-    })
   }
 
   const supabase = await createClient()
@@ -82,7 +94,7 @@ export async function POST(request: NextRequest) {
         break
 
       case "meeting.participant_joined":
-        const joinedParticipant = event.payload.object.participant
+        const joinedParticipant = event.payload?.object?.participant
         if (joinedParticipant) {
           // Try to match with existing user by email
           const { data: existingUser } = await supabase
@@ -140,7 +152,7 @@ export async function POST(request: NextRequest) {
         break
 
       case "meeting.participant_left":
-        const leftParticipant = event.payload.object.participant
+        const leftParticipant = event.payload?.object?.participant
         if (leftParticipant) {
           const { data: existingUser } = await supabase
             .from("users")
