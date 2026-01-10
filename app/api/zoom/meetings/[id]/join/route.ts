@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { generateSdkSignature, isZoomSdkConfigured } from "@/lib/zoom"
+import { generateSdkSignature, isZoomSdkConfigured, isAllowedEmail, getDomainRestrictionError } from "@/lib/zoom"
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -46,6 +46,73 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   // Determine if user is host
   const isHost = meeting.host_id === user.id
 
+  // For class meetings, check if user is authorized to join
+  const isClassMeeting = !!meeting.class_id
+  if (isClassMeeting && !isHost) {
+    // Students: Must have DepEd email AND be enrolled in the class
+    if (userData.role === "student") {
+      // Check domain restriction (only for students)
+      if (!isAllowedEmail(userData.email)) {
+        return NextResponse.json({ 
+          error: getDomainRestrictionError(),
+          code: "DOMAIN_RESTRICTED"
+        }, { status: 403 })
+      }
+
+      // Check if enrolled in the class
+      const { data: enrollment } = await supabase
+        .from("class_students")
+        .select("id")
+        .eq("class_id", meeting.class_id)
+        .eq("student_id", user.id)
+        .single()
+
+      if (!enrollment) {
+        return NextResponse.json({ 
+          error: "You are not enrolled in this class",
+          code: "NOT_ENROLLED"
+        }, { status: 403 })
+      }
+    }
+
+    // Parents: Must have a child enrolled in the class (no domain restriction)
+    if (userData.role === "parent") {
+      const { data: childEnrollment } = await supabase
+        .from("parent_children")
+        .select(`
+          student_id,
+          enrollment:class_students!inner(id)
+        `)
+        .eq("parent_id", user.id)
+        .eq("class_students.class_id", meeting.class_id)
+        .limit(1)
+
+      if (!childEnrollment || childEnrollment.length === 0) {
+        return NextResponse.json({ 
+          error: "None of your children are enrolled in this class",
+          code: "NOT_ENROLLED"
+        }, { status: 403 })
+      }
+    }
+
+    // Teachers and Admins: Can join any class meeting (no restrictions)
+  }
+
+  // Check if user has a personalized join URL (from registration)
+  let personalizedJoinUrl: string | null = null
+  if (meeting.registration_enabled && !isHost) {
+    const { data: registration } = await supabase
+      .from("meeting_registrants")
+      .select("join_url")
+      .eq("meeting_id", id)
+      .eq("user_id", user.id)
+      .single()
+    
+    if (registration?.join_url) {
+      personalizedJoinUrl = registration.join_url
+    }
+  }
+
   // Build response
   const response: {
     joinUrl: string
@@ -57,13 +124,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     sdkKey?: string
     userName: string
     userEmail: string
+    isRegistered?: boolean
   } = {
-    joinUrl: meeting.join_url,
+    joinUrl: personalizedJoinUrl || meeting.join_url,
     password: meeting.password,
     meetingNumber: meeting.zoom_meeting_id,
     isHost,
     userName: userData.name,
     userEmail: userData.email,
+    isRegistered: !!personalizedJoinUrl,
   }
 
   // Include start URL for host

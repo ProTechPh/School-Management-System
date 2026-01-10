@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
 import crypto from "crypto"
 
+// Minimum duration in seconds to count as "present" (15 minutes)
+const MIN_ATTENDANCE_DURATION = 15 * 60
+
 /**
  * Zoom Webhook Handler
  * 
@@ -41,13 +44,6 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Log incoming webhook for debugging
-  console.log("Zoom webhook received:", {
-    event: event.event,
-    meetingId: event.payload?.object?.id,
-    participant: event.payload?.object?.participant,
-  })
-
   // Verify webhook signature for all other events
   const signature = request.headers.get("x-zm-signature")
   const timestamp = request.headers.get("x-zm-request-timestamp")
@@ -68,24 +64,18 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient()
   const meetingId = event.payload?.object?.id?.toString()
 
-  console.log("Looking for meeting with zoom_meeting_id:", meetingId)
-
   if (!meetingId) {
-    console.log("No meeting ID in webhook payload")
     return NextResponse.json({ received: true })
   }
 
   // Find meeting in our database
-  const { data: meeting, error: meetingError } = await supabase
+  const { data: meeting } = await supabase
     .from("zoom_meetings")
-    .select("id")
+    .select("id, class_id, start_time")
     .eq("zoom_meeting_id", meetingId)
     .single()
 
-  console.log("Meeting lookup result:", { meeting, error: meetingError })
-
   if (!meeting) {
-    console.log(`Meeting ${meetingId} not found in database`)
     return NextResponse.json({ received: true })
   }
 
@@ -103,6 +93,11 @@ export async function POST(request: NextRequest) {
           .from("zoom_meetings")
           .update({ status: "ended", updated_at: new Date().toISOString() })
           .eq("id", meeting.id)
+        
+        // Process final attendance when meeting ends
+        if (meeting.class_id) {
+          await processFinalAttendance(supabase, meeting.id, meeting.class_id, meeting.start_time)
+        }
         break
 
       case "meeting.participant_joined":
@@ -126,40 +121,6 @@ export async function POST(request: NextRequest) {
           }, {
             onConflict: "meeting_id,user_id",
           })
-
-          // Auto-mark attendance for students if meeting is linked to a class
-          if (existingUser?.id && existingUser.role === "student") {
-            const { data: meetingData } = await supabase
-              .from("zoom_meetings")
-              .select("class_id, start_time")
-              .eq("id", meeting.id)
-              .single()
-
-            if (meetingData?.class_id) {
-              // Check if student is enrolled in this class
-              const { data: enrollment } = await supabase
-                .from("class_students")
-                .select("id")
-                .eq("class_id", meetingData.class_id)
-                .eq("student_id", existingUser.id)
-                .single()
-
-              if (enrollment) {
-                const meetingDate = new Date(meetingData.start_time).toISOString().split("T")[0]
-                
-                // Create or update attendance record
-                await supabase.from("attendance_records").upsert({
-                  student_id: existingUser.id,
-                  class_id: meetingData.class_id,
-                  date: meetingDate,
-                  status: "present",
-                }, {
-                  onConflict: "student_id,class_id,date",
-                  ignoreDuplicates: false,
-                })
-              }
-            }
-          }
         }
         break
 
@@ -168,35 +129,49 @@ export async function POST(request: NextRequest) {
         if (leftParticipant) {
           const { data: existingUser } = await supabase
             .from("users")
-            .select("id")
+            .select("id, role")
             .eq("email", leftParticipant.email)
             .single()
 
           if (existingUser) {
             const { data: participantRecord } = await supabase
               .from("zoom_participants")
-              .select("join_time")
+              .select("join_time, duration")
               .eq("meeting_id", meeting.id)
               .eq("user_id", existingUser.id)
               .single()
 
-            let duration = 0
+            let sessionDuration = 0
             if (participantRecord?.join_time && leftParticipant.leave_time) {
-              duration = Math.floor(
+              sessionDuration = Math.floor(
                 (new Date(leftParticipant.leave_time).getTime() - 
                  new Date(participantRecord.join_time).getTime()) / 1000
               )
             }
 
+            // Accumulate duration (in case of multiple join/leave)
+            const totalDuration = (participantRecord?.duration || 0) + sessionDuration
+
             await supabase
               .from("zoom_participants")
               .update({
                 leave_time: leftParticipant.leave_time,
-                duration,
+                duration: totalDuration,
                 status: "left",
               })
               .eq("meeting_id", meeting.id)
               .eq("user_id", existingUser.id)
+
+            // Update attendance based on duration for students
+            if (existingUser.role === "student" && meeting.class_id) {
+              await updateStudentAttendance(
+                supabase, 
+                existingUser.id, 
+                meeting.class_id, 
+                meeting.start_time, 
+                totalDuration
+              )
+            }
           }
         }
         break
@@ -206,4 +181,98 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ received: true })
+}
+
+
+/**
+ * Update student attendance based on meeting duration
+ * Only marks "present" if duration >= 15 minutes
+ */
+async function updateStudentAttendance(
+  supabase: ReturnType<typeof createAdminClient>,
+  studentId: string,
+  classId: string,
+  meetingStartTime: string,
+  durationSeconds: number
+) {
+  // Check if student is enrolled in this class
+  const { data: enrollment } = await supabase
+    .from("class_students")
+    .select("id")
+    .eq("class_id", classId)
+    .eq("student_id", studentId)
+    .single()
+
+  if (!enrollment) return
+
+  const meetingDate = new Date(meetingStartTime).toISOString().split("T")[0]
+  const status = durationSeconds >= MIN_ATTENDANCE_DURATION ? "present" : "partial"
+
+  await supabase.from("attendance_records").upsert({
+    student_id: studentId,
+    class_id: classId,
+    date: meetingDate,
+    status,
+  }, {
+    onConflict: "student_id,class_id,date",
+    ignoreDuplicates: false,
+  })
+}
+
+/**
+ * Process final attendance when meeting ends
+ * - Updates attendance for students who stayed 15+ mins
+ * - Marks enrolled students who didn't join as "absent"
+ */
+async function processFinalAttendance(
+  supabase: ReturnType<typeof createAdminClient>,
+  meetingId: string,
+  classId: string,
+  meetingStartTime: string
+) {
+  const meetingDate = new Date(meetingStartTime).toISOString().split("T")[0]
+
+  // Get all enrolled students in this class
+  const { data: enrolledStudents } = await supabase
+    .from("class_students")
+    .select("student_id")
+    .eq("class_id", classId)
+
+  if (!enrolledStudents || enrolledStudents.length === 0) return
+
+  // Get all participants who joined this meeting
+  const { data: participants } = await supabase
+    .from("zoom_participants")
+    .select("user_id, duration")
+    .eq("meeting_id", meetingId)
+    .not("user_id", "is", null)
+
+  const participantMap = new Map(
+    participants?.map(p => [p.user_id, p.duration || 0]) || []
+  )
+
+  // Process each enrolled student
+  for (const enrollment of enrolledStudents) {
+    const studentId = enrollment.student_id
+    const duration = participantMap.get(studentId) || 0
+
+    let status: string
+    if (duration >= MIN_ATTENDANCE_DURATION) {
+      status = "present"
+    } else if (duration > 0) {
+      status = "partial" // Joined but didn't stay long enough
+    } else {
+      status = "absent" // Never joined
+    }
+
+    await supabase.from("attendance_records").upsert({
+      student_id: studentId,
+      class_id: classId,
+      date: meetingDate,
+      status,
+    }, {
+      onConflict: "student_id,class_id,date",
+      ignoreDuplicates: false,
+    })
+  }
 }

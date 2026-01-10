@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { format } from "date-fns"
 import Link from "next/link"
+import { MeetingAttendanceSummary } from "@/components/meeting-attendance-summary"
 
 interface Participant {
   id: string
@@ -253,6 +254,11 @@ export default function TeacherMeetingParticipantsPage({
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Attendance Summary for Class Meetings */}
+      {meeting?.class && (
+        <MeetingAttendanceSummary meetingId={id} classId={meeting.class.id} />
       )}
 
       <Card>

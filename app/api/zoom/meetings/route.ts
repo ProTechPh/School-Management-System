@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { createZoomMeeting, isZoomConfigured } from "@/lib/zoom"
+import { createZoomMeeting, addMeetingRegistrantsBatch, isZoomConfigured, isAllowedEmail } from "@/lib/zoom"
 import type { CreateZoomMeetingRequest } from "@/lib/zoom"
 
 // GET - List meetings
@@ -83,6 +83,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Enable registration for class-linked meetings
+    const isClassMeeting = !!classId
+    const enableRegistration = isClassMeeting
+
     // Create meeting in Zoom
     const zoomMeeting = await createZoomMeeting({
       topic: title,
@@ -91,9 +95,8 @@ export async function POST(request: NextRequest) {
       duration,
       timezone,
       settings,
+      enableRegistration,
     })
-
-    console.log("Zoom API response - meeting ID:", zoomMeeting.id, "type:", typeof zoomMeeting.id)
 
     // Store in database
     const { data: meeting, error: dbError } = await supabase
@@ -113,6 +116,8 @@ export async function POST(request: NextRequest) {
         class_id: classId,
         target_audience: targetAudience || "class",
         settings: settings || {},
+        registration_url: zoomMeeting.registration_url,
+        registration_enabled: enableRegistration,
       })
       .select(`
         *,
@@ -124,6 +129,15 @@ export async function POST(request: NextRequest) {
     if (dbError) {
       console.error("Error storing meeting:", dbError)
       return NextResponse.json({ error: dbError.message }, { status: 500 })
+    }
+
+    // For class meetings, register authorized users so they bypass waiting room
+    if (classId && meeting) {
+      // Register enrolled students (with valid DepEd emails)
+      await registerClassStudents(supabase, meeting.id, zoomMeeting.id.toString(), classId)
+      
+      // Register all teachers and admins so they can join any class meeting
+      await registerStaff(supabase, meeting.id, zoomMeeting.id.toString())
     }
 
     // Create calendar event for the meeting
@@ -204,5 +218,127 @@ async function sendMeetingNotifications(
 
   if (notifications.length > 0) {
     await supabase.from("notifications").insert(notifications)
+  }
+}
+
+/**
+ * Register all enrolled students for a class meeting
+ * Only registers students with valid @r1.deped.gov.ph emails
+ */
+async function registerClassStudents(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  meetingId: string,
+  zoomMeetingId: string,
+  classId: string
+) {
+  try {
+    // Get all enrolled students with their info
+    const { data: enrollments } = await supabase
+      .from("class_students")
+      .select(`
+        student_id,
+        student:users!class_students_student_id_fkey(id, name, email)
+      `)
+      .eq("class_id", classId)
+
+    if (!enrollments || enrollments.length === 0) return
+
+    // Type helper for the joined student data
+    type StudentData = { id: string; name: string; email: string } | null
+
+    // Prepare registrants for Zoom - only include students with valid DepEd emails
+    const registrants = enrollments
+      .filter(e => {
+        const student = e.student as unknown as StudentData
+        return student?.email && isAllowedEmail(student.email)
+      })
+      .map(e => {
+        const student = e.student as unknown as StudentData
+        return {
+          email: student!.email,
+          firstName: student!.name?.split(' ')[0] || 'Student',
+          lastName: student!.name?.split(' ').slice(1).join(' ') || '',
+          studentId: e.student_id,
+        }
+      })
+
+    if (registrants.length === 0) return
+
+    // Register with Zoom
+    const results = await addMeetingRegistrantsBatch(zoomMeetingId, registrants)
+
+    // Store registrations in database
+    const registrationRecords = results.map((result, index) => {
+      return {
+        meeting_id: meetingId,
+        user_id: registrants[index]?.studentId,
+        zoom_registrant_id: result.registrant_id,
+        join_url: result.join_url,
+        status: 'approved',
+      }
+    }).filter(r => r.user_id)
+
+    if (registrationRecords.length > 0) {
+      await supabase.from("meeting_registrants").insert(registrationRecords)
+    }
+  } catch (error) {
+    console.error("Error registering class students:", error)
+    // Don't throw - meeting was created successfully, registration is secondary
+  }
+}
+
+
+/**
+ * Register all teachers and admins for a class meeting
+ * This allows them to bypass the waiting room
+ */
+async function registerStaff(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  meetingId: string,
+  zoomMeetingId: string
+) {
+  try {
+    // Get all teachers and admins
+    const { data: staff } = await supabase
+      .from("users")
+      .select("id, name, email")
+      .in("role", ["teacher", "admin"])
+
+    if (!staff || staff.length === 0) return
+
+    // Prepare registrants for Zoom
+    const registrants = staff
+      .filter(s => s.email)
+      .map(s => ({
+        email: s.email,
+        firstName: s.name?.split(' ')[0] || 'Staff',
+        lastName: s.name?.split(' ').slice(1).join(' ') || '',
+        oderId: s.id,
+      }))
+
+    if (registrants.length === 0) return
+
+    // Register with Zoom
+    const results = await addMeetingRegistrantsBatch(zoomMeetingId, registrants)
+
+    // Store registrations in database
+    const registrationRecords = results.map((result, index) => {
+      return {
+        meeting_id: meetingId,
+        user_id: registrants[index]?.oderId,
+        zoom_registrant_id: result.registrant_id,
+        join_url: result.join_url,
+        status: 'approved',
+      }
+    }).filter(r => r.user_id)
+
+    if (registrationRecords.length > 0) {
+      await supabase.from("meeting_registrants").upsert(registrationRecords, {
+        onConflict: "meeting_id,user_id",
+        ignoreDuplicates: true,
+      })
+    }
+  } catch (error) {
+    console.error("Error registering staff:", error)
   }
 }

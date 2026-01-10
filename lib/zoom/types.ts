@@ -54,6 +54,28 @@ export interface ZoomMeetingSettings {
   waiting_room?: boolean
   auto_recording?: 'none' | 'local' | 'cloud'
   meeting_authentication?: boolean
+  // Registration settings
+  registration_type?: 1 | 2 | 3 // 1=register once, 2=register each, 3=register once select occurrences
+  approval_type?: 0 | 1 | 2 // 0=auto approve, 1=manual approve, 2=no registration required
+}
+
+// Zoom Registration Types
+export interface ZoomRegistrant {
+  id: string
+  email: string
+  first_name: string
+  last_name?: string
+  status: 'approved' | 'pending' | 'denied'
+  join_url: string
+  registrant_id: string
+}
+
+export interface ZoomRegistrantResponse {
+  id: string
+  registrant_id: string
+  topic: string
+  start_time: string
+  join_url: string
 }
 
 // Zoom API Response Types
@@ -70,6 +92,7 @@ export interface ZoomApiMeeting {
   join_url: string
   start_url: string
   password: string
+  registration_url?: string
   settings: {
     host_video: boolean
     participant_video: boolean
@@ -77,6 +100,8 @@ export interface ZoomApiMeeting {
     mute_upon_entry: boolean
     waiting_room: boolean
     auto_recording: string
+    approval_type?: number
+    registration_type?: number
   }
 }
 

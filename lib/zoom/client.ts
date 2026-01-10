@@ -5,7 +5,7 @@
  * Requires ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET env vars.
  */
 
-import type { ZoomApiMeeting, ZoomMeetingSettings, ZoomApiParticipant } from './types'
+import type { ZoomApiMeeting, ZoomMeetingSettings, ZoomApiParticipant, ZoomRegistrantResponse } from './types'
 
 const ZOOM_API_BASE = 'https://api.zoom.us/v2'
 const ZOOM_OAUTH_URL = 'https://zoom.us/oauth/token'
@@ -96,11 +96,12 @@ export async function createZoomMeeting(params: {
   duration: number
   timezone?: string
   settings?: Partial<ZoomMeetingSettings>
+  enableRegistration?: boolean
 }): Promise<ZoomApiMeeting> {
-  const { topic, agenda, startTime, duration, timezone = 'UTC', settings = {} } = params
+  const { topic, agenda, startTime, duration, timezone = 'UTC', settings = {}, enableRegistration = false } = params
 
   // Type 2 = Scheduled meeting
-  const body = {
+  const body: Record<string, unknown> = {
     topic,
     type: 2,
     start_time: startTime,
@@ -112,9 +113,14 @@ export async function createZoomMeeting(params: {
       participant_video: settings.participant_video ?? true,
       join_before_host: settings.join_before_host ?? false,
       mute_upon_entry: settings.mute_upon_entry ?? true,
-      waiting_room: settings.waiting_room ?? true,
+      waiting_room: true, // Always enable waiting room - registered users bypass it
       auto_recording: settings.auto_recording ?? 'none',
-      meeting_authentication: settings.meeting_authentication ?? false,
+      meeting_authentication: false,
+      // Registration settings - registered users bypass waiting room
+      ...(enableRegistration && {
+        approval_type: 0, // Auto-approve registrants
+        registration_type: 1, // Register once, attend any occurrence
+      }),
     },
   }
 
@@ -244,4 +250,84 @@ export function isZoomSdkConfigured(): boolean {
     process.env.ZOOM_SDK_KEY &&
     process.env.ZOOM_SDK_SECRET
   )
+}
+
+/**
+ * Add a registrant to a meeting
+ * Returns the registrant's unique join URL
+ */
+export async function addMeetingRegistrant(meetingId: string, params: {
+  email: string
+  firstName: string
+  lastName?: string
+}): Promise<ZoomRegistrantResponse> {
+  const { email, firstName, lastName = '' } = params
+
+  return zoomFetch<ZoomRegistrantResponse>(`/meetings/${meetingId}/registrants`, {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      first_name: firstName,
+      last_name: lastName,
+    }),
+  })
+}
+
+/**
+ * Add multiple registrants to a meeting (batch)
+ * Returns array of results with join URLs
+ */
+export async function addMeetingRegistrantsBatch(meetingId: string, registrants: Array<{
+  email: string
+  firstName: string
+  lastName?: string
+}>): Promise<ZoomRegistrantResponse[]> {
+  // Zoom doesn't have a batch endpoint, so we process in parallel with rate limiting
+  const results: ZoomRegistrantResponse[] = []
+  const batchSize = 10 // Process 10 at a time to avoid rate limits
+  
+  for (let i = 0; i < registrants.length; i += batchSize) {
+    const batch = registrants.slice(i, i + batchSize)
+    const batchResults = await Promise.all(
+      batch.map(r => 
+        addMeetingRegistrant(meetingId, r).catch(err => {
+          console.error(`Failed to register ${r.email}:`, err.message)
+          return null
+        })
+      )
+    )
+    results.push(...batchResults.filter((r): r is ZoomRegistrantResponse => r !== null))
+    
+    // Small delay between batches to respect rate limits
+    if (i + batchSize < registrants.length) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+  }
+  
+  return results
+}
+
+/**
+ * Get list of registrants for a meeting
+ */
+export async function getMeetingRegistrants(meetingId: string): Promise<{
+  registrants: Array<{
+    id: string
+    email: string
+    first_name: string
+    last_name: string
+    status: 'approved' | 'pending' | 'denied'
+    join_url: string
+  }>
+}> {
+  return zoomFetch(`/meetings/${meetingId}/registrants`)
+}
+
+/**
+ * Delete a registrant from a meeting
+ */
+export async function deleteMeetingRegistrant(meetingId: string, registrantId: string): Promise<void> {
+  await zoomFetch(`/meetings/${meetingId}/registrants/${registrantId}`, {
+    method: 'DELETE',
+  })
 }
