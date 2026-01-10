@@ -226,6 +226,19 @@ export async function detectSuspiciousActivity(userId?: string) {
 }
 
 /**
+ * Escapes a cell value for CSV to prevent formula injection attacks
+ * Malicious values like =CMD|'/C calc'!A0 could execute when opened in Excel
+ */
+function escapeCSVCell(cell: string): string {
+  // Escape formula injection - prefix with single quote if starts with dangerous chars
+  if (/^[=+\-@\t\r]/.test(cell)) {
+    return `"'${cell.replace(/"/g, '""')}"`
+  }
+  // Escape quotes and wrap in quotes
+  return `"${cell.replace(/"/g, '""')}"`
+}
+
+/**
  * Export audit logs to CSV
  */
 export function exportAuditLogsToCSV(logs: AuditLogEntry[]): string {
@@ -240,8 +253,8 @@ export function exportAuditLogsToCSV(logs: AuditLogEntry[]): string {
   ])
 
   const csvContent = [
-    headers.join(","),
-    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    headers.map(h => escapeCSVCell(h)).join(","),
+    ...rows.map((row) => row.map((cell) => escapeCSVCell(String(cell))).join(",")),
   ].join("\n")
 
   return csvContent

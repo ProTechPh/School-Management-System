@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { validateOrigin } from "@/lib/security"
+import { z } from "zod"
+
+// Validation schema for assignment creation
+const createAssignmentSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  description: z.string().max(5000).optional().nullable(),
+  classId: z.string().uuid("Invalid class ID"),
+  dueDate: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid due date format"),
+  maxScore: z.number().min(1).max(1000).optional(),
+  allowLateSubmission: z.boolean().optional(),
+  status: z.enum(["draft", "published"]).optional(),
+})
 
 // GET - Fetch assignments
 export async function GET(request: NextRequest) {
@@ -53,6 +66,11 @@ export async function GET(request: NextRequest) {
 
 // POST - Create assignment
 export async function POST(request: NextRequest) {
+  // SECURITY: CSRF Protection
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: "Invalid Origin" }, { status: 403 })
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -72,16 +90,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { title, description, classId, dueDate, maxScore, allowLateSubmission, status } = body
-
-    if (!title || !classId || !dueDate) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    
+    // SECURITY: Validate input with Zod schema
+    const validationResult = createAssignmentSchema.safeParse(body)
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        error: validationResult.error.errors[0]?.message || "Invalid input" 
+      }, { status: 400 })
     }
 
-    // Validate date format
-    if (isNaN(Date.parse(dueDate))) {
-      return NextResponse.json({ error: "Invalid due date format" }, { status: 400 })
-    }
+    const { title, description, classId, dueDate, maxScore, allowLateSubmission, status } = validationResult.data
 
     const { data, error } = await supabase
       .from("assignments")

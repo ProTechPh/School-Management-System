@@ -1,8 +1,19 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextRequest, NextResponse } from "next/server"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { getClientIp } from "@/lib/security"
+import { getClientIp, validateOrigin } from "@/lib/security"
 import { handleApiError, ApiErrors } from "@/lib/api-errors"
+import { z } from "zod"
+
+// Validation schema for chat messages
+const sendMessageSchema = z.object({
+  receiverId: z.string().uuid("Invalid receiver ID"),
+  content: z.string()
+    .min(1, "Message cannot be empty")
+    .max(5000, "Message too long")
+    // Basic XSS prevention - strip script tags
+    .refine(val => !/<script/i.test(val), "Invalid content"),
+})
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,5 +48,66 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ messages })
   } catch (error) {
     return handleApiError(error, "chat-messages")
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // SECURITY: CSRF Protection
+    if (!validateOrigin(request)) {
+      return ApiErrors.invalidOrigin()
+    }
+
+    const ip = getClientIp(request)
+    const isAllowed = await checkRateLimit(ip, "chat-send", 30, 60 * 1000)
+    
+    if (!isAllowed) {
+      return ApiErrors.rateLimited()
+    }
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return ApiErrors.unauthorized()
+    }
+
+    const body = await request.json()
+    
+    // SECURITY: Validate input
+    const validationResult = sendMessageSchema.safeParse(body)
+    if (!validationResult.success) {
+      return ApiErrors.badRequest(validationResult.error.errors[0]?.message || "Invalid input")
+    }
+
+    const { receiverId, content } = validationResult.data
+
+    // Verify receiver exists
+    const { data: receiver } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", receiverId)
+      .single()
+
+    if (!receiver) {
+      return ApiErrors.notFound("Recipient")
+    }
+
+    const { data: message, error } = await supabase
+      .from("chat_messages")
+      .insert({
+        sender_id: user.id,
+        receiver_id: receiverId,
+        content,
+        read: false,
+      })
+      .select("id")
+      .single()
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true, messageId: message.id })
+  } catch (error) {
+    return handleApiError(error, "chat-send")
   }
 }

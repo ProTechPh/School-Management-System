@@ -11,6 +11,15 @@ import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useDebouncedCallback } from "use-debounce"
+import DOMPurify from "isomorphic-dompurify"
+
+// SECURITY: Sanitize message content to prevent XSS
+function sanitizeContent(content: string): string {
+  return DOMPurify.sanitize(content, { 
+    ALLOWED_TAGS: [], // Strip all HTML tags
+    ALLOWED_ATTR: [] 
+  })
+}
 
 interface ChatUser {
   id: string
@@ -452,7 +461,8 @@ export function ChatPage({ searchPlaceholder = "Search users to chat...", search
                           "max-w-[70%] rounded-lg px-3 py-2",
                           msg.sender_id === currentUser?.id ? "bg-primary text-primary-foreground" : "bg-muted"
                         )}>
-                          <p className="text-sm">{msg.content}</p>
+                          {/* SECURITY: Sanitize message content to prevent XSS */}
+                          <p className="text-sm">{sanitizeContent(msg.content)}</p>
                           <p className={cn(
                             "mt-1 text-xs",
                             msg.sender_id === currentUser?.id ? "text-primary-foreground/70" : "text-muted-foreground"

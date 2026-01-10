@@ -50,13 +50,18 @@ const nextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            // SECURITY: Allow geolocation for QR check-in feature, camera for QR scanning
+            value: 'camera=(self), microphone=(), geolocation=(self)',
           },
           {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://va.vercel-scripts.com",
+              // SECURITY: Removed 'unsafe-eval' and 'unsafe-inline' for better XSS protection
+              // Note: This may require testing - some features might need adjustment
+              "script-src 'self' https://vercel.live https://va.vercel-scripts.com",
+              // Style-src still needs unsafe-inline for CSS-in-JS libraries (Tailwind, etc.)
+              // Consider using nonces in the future for better security
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",

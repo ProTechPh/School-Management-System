@@ -92,7 +92,7 @@ export function validatePagination(page: string | null, pageSize: string | null)
 }
 
 /**
- * Sanitizes search input to prevent SQL injection
+ * Sanitizes search input to prevent SQL injection and special character abuse
  */
 export function sanitizeSearchInput(input: string | null, maxLength = 100): string {
   if (!input) return ''
@@ -100,6 +100,16 @@ export function sanitizeSearchInput(input: string | null, maxLength = 100): stri
   // Trim and limit length
   const trimmed = input.trim().slice(0, maxLength)
   
-  // Escape special ILIKE characters
-  return trimmed.replace(/[%_]/g, '\\$&')
+  // Remove null bytes and control characters
+  const noNulls = trimmed.replace(/[\x00-\x1f\x7f]/g, '')
+  
+  // Escape special ILIKE/LIKE characters (%, _, \)
+  const escaped = noNulls
+    .replace(/\\/g, '\\\\')  // Escape backslashes first
+    .replace(/%/g, '\\%')    // Escape percent
+    .replace(/_/g, '\\_')    // Escape underscore
+  
+  // Remove any remaining potentially dangerous characters for SQL
+  // Allow only alphanumeric, spaces, and common punctuation
+  return escaped.replace(/[^\w\s\-.'@]/gi, '')
 }

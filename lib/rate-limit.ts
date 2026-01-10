@@ -19,8 +19,16 @@ const supabaseAdmin = createClient(
  * @param endpoint - The action being performed (e.g., 'login', 'submit-quiz')
  * @param limit - Max requests allowed in the window
  * @param windowMs - Time window in milliseconds
+ * @param failOpen - If true, allows requests on DB errors (default: true for availability)
+ *                   Set to false for security-critical endpoints like login
  */
-export async function checkRateLimit(identifier: string, endpoint: string, limit: number, windowMs: number): Promise<boolean> {
+export async function checkRateLimit(
+  identifier: string, 
+  endpoint: string, 
+  limit: number, 
+  windowMs: number,
+  failOpen: boolean = true
+): Promise<boolean> {
   const key = `${identifier}:${endpoint}`
   
   try {
@@ -33,15 +41,16 @@ export async function checkRateLimit(identifier: string, endpoint: string, limit
 
     if (error) {
       console.error("Rate limit RPC error:", error)
-      // SECURITY FIX: Fail OPEN on DB error to prevent outage amplification
-      return true 
+      // Return based on failOpen setting
+      // For auth endpoints, fail closed (deny) to prevent brute force during outages
+      return failOpen
     }
 
     return !!data
 
   } catch (err) {
     console.error("Rate limit unexpected error:", err)
-    // SECURITY FIX: Fail OPEN on unexpected errors
-    return true 
+    // Return based on failOpen setting
+    return failOpen
   }
 }

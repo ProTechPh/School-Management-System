@@ -1,10 +1,16 @@
 import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { getClientIp } from "@/lib/security"
+import { getClientIp, validateOrigin } from "@/lib/security"
+import { createAnnouncementSchema } from "@/lib/validation-schemas"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // SECURITY: CSRF Protection
+    if (!validateOrigin(request)) {
+      return NextResponse.json({ error: "Invalid Origin" }, { status: 403 })
+    }
+
     // 1. Rate Limiting
     const ip = getClientIp(request)
     const isAllowed = await checkRateLimit(ip, "create-announcement", 5, 60 * 1000) // 5 per minute
@@ -34,11 +40,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, content, targetAudience, priority } = body
-
-    if (!title || !content) {
-      return NextResponse.json({ error: "Title and content are required" }, { status: 400 })
+    
+    // SECURITY: Validate input with Zod schema
+    const validationResult = createAnnouncementSchema.safeParse(body)
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        error: validationResult.error.errors[0]?.message || "Invalid input" 
+      }, { status: 400 })
     }
+
+    const { title, content, targetAudience, priority } = validationResult.data
 
     // Enforce Role-Based Logic
     // Teachers can only post to "students" (or specific student groups if implemented later)

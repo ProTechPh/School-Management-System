@@ -9,7 +9,8 @@ export async function POST(request: Request) {
     const ip = getClientIp(request)
     
     // Check rate limit (5 attempts per minute)
-    const isAllowed = await checkRateLimit(ip, "login", 5, 60 * 1000)
+    // SECURITY: Fail closed for login to prevent brute force during DB outages
+    const isAllowed = await checkRateLimit(ip, "login", 5, 60 * 1000, false)
     
     if (!isAllowed) {
       return NextResponse.json(
