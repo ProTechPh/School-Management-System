@@ -93,6 +93,8 @@ export async function POST(request: NextRequest) {
       settings,
     })
 
+    console.log("Zoom API response - meeting ID:", zoomMeeting.id, "type:", typeof zoomMeeting.id)
+
     // Store in database
     const { data: meeting, error: dbError } = await supabase
       .from("zoom_meetings")

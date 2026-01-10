@@ -58,7 +58,7 @@ export interface ZoomMeetingSettings {
 
 // Zoom API Response Types
 export interface ZoomApiMeeting {
-  id: number
+  id: number | string
   uuid: string
   host_id: string
   topic: string

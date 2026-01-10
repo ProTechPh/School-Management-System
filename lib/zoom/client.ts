@@ -78,7 +78,11 @@ async function zoomFetch<T>(endpoint: string, options: RequestInit = {}): Promis
     return {} as T
   }
 
-  return response.json()
+  // Parse response as text first to preserve large integer precision
+  const text = await response.text()
+  // Replace large meeting IDs with strings to prevent precision loss
+  const fixedText = text.replace(/"id"\s*:\s*(\d{10,})/g, '"id":"$1"')
+  return JSON.parse(fixedText) as T
 }
 
 
