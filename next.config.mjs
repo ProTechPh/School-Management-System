@@ -1,12 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // API route body size limit (prevent DoS)
-  api: {
-    bodyParser: {
-      sizeLimit: '1mb',
-    },
-  },
-  
   images: {
     unoptimized: false, // OPTIMIZATION: Enable image optimization
     formats: ['image/avif', 'image/webp'],
