@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 import crypto from "crypto"
 
 /**
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const meetingId = event.payload?.object?.id?.toString()
 
   console.log("Looking for meeting with zoom_meeting_id:", meetingId)
