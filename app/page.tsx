@@ -27,7 +27,10 @@ import {
   LayoutDashboard,
   User,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Video,
+  Calendar,
+  Monitor
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -96,6 +99,13 @@ export default function HomePage() {
       bg: "bg-emerald-400/10"
     },
     {
+      icon: Video,
+      title: "Virtual Classes",
+      description: "Schedule and join Zoom meetings seamlessly",
+      color: "text-indigo-400",
+      bg: "bg-indigo-400/10"
+    },
+    {
       icon: QrCode,
       title: "QR Attendance",
       description: "Quick check-in with location verification",
@@ -135,7 +145,7 @@ export default function HomePage() {
   const stats = [
     { value: "4", label: "User Roles" },
     { value: "15+", label: "Features" },
-    { value: "QR", label: "Check-in" },
+    { value: "Zoom", label: "Integrated" },
     { value: "RLS", label: "Security" }
   ]
 
@@ -293,6 +303,95 @@ export default function HomePage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      </section>
+
+      {/* Zoom Integration Section */}
+      <section className="mx-auto max-w-6xl px-4 py-20">
+        <div className="relative rounded-3xl bg-gradient-to-br from-indigo-500/20 via-blue-500/10 to-violet-500/20 border border-indigo-500/20 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(99,102,241,0.15),transparent_50%)]" />
+          <div className="relative grid md:grid-cols-2 gap-8 p-8 md:p-12">
+            <div className="flex flex-col justify-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-sm text-indigo-400 mb-6 w-fit">
+                <Video className="h-4 w-4" />
+                <span>Zoom Integration</span>
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                Virtual Classes,
+                <span className="text-indigo-400"> Real Learning</span>
+              </h2>
+              <p className="text-muted-foreground text-lg mb-8">
+                Seamlessly schedule and conduct online classes with our integrated Zoom functionality. 
+                Teachers can create meetings, students can join with one click, and attendance is tracked automatically.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/50">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10">
+                    <Calendar className="h-5 w-5 text-indigo-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Schedule</p>
+                    <p className="text-xs text-muted-foreground">Easy booking</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/50">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Monitor className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Join</p>
+                    <p className="text-xs text-muted-foreground">One-click access</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/50">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10">
+                    <ClipboardCheck className="h-5 w-5 text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Track</p>
+                    <p className="text-xs text-muted-foreground">Auto attendance</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-center">
+              <div className="relative w-full max-w-sm">
+                {/* Mock Zoom Meeting Card */}
+                <div className="rounded-2xl bg-card/80 border border-border/50 backdrop-blur-sm p-6 shadow-2xl shadow-indigo-500/10">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500">
+                      <Video className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">Math 101 - Live Class</p>
+                      <p className="text-sm text-muted-foreground">Starting in 5 minutes</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Host</span>
+                      <span className="text-foreground">Mr. Santos</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Duration</span>
+                      <span className="text-foreground">1 hour</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Participants</span>
+                      <span className="text-foreground">32 students</span>
+                    </div>
+                  </div>
+                  <Button className="w-full bg-indigo-500 hover:bg-indigo-600">
+                    <Video className="mr-2 h-4 w-4" />
+                    Join Meeting
+                  </Button>
+                </div>
+                {/* Decorative elements */}
+                <div className="absolute -top-4 -right-4 w-24 h-24 bg-indigo-500/20 rounded-full blur-2xl" />
+                <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl" />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
