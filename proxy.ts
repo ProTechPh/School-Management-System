@@ -42,8 +42,11 @@ export async function proxy(request: NextRequest) {
 
   // 1. Global CSRF Protection
   if (request.nextUrl.pathname.startsWith("/api/")) {
+    // Skip CSRF check for webhook endpoints (they have their own signature verification)
+    const isWebhook = request.nextUrl.pathname.startsWith("/api/zoom/webhook")
+    
     const method = request.method.toUpperCase()
-    if (["POST", "PUT", "DELETE", "PATCH"].includes(method)) {
+    if (["POST", "PUT", "DELETE", "PATCH"].includes(method) && !isWebhook) {
       if (!validateOrigin(request)) {
         const errorResponse = new NextResponse(
           JSON.stringify({ error: "Invalid Origin" }),
