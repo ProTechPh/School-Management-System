@@ -4,6 +4,7 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
+import { AdminSessionGuard } from "@/components/admin-session-guard"
 import { Loader2 } from "lucide-react"
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -49,11 +50,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardSidebar role="admin" userName={user?.name || "Admin"} userAvatar={user?.avatar} />
-      <div className="pt-14 lg:pt-0 lg:pl-64">
-        <main>{children}</main>
+    <AdminSessionGuard>
+      <div className="min-h-screen bg-background">
+        <DashboardSidebar role="admin" userName={user?.name || "Admin"} userAvatar={user?.avatar} />
+        <div className="pt-14 lg:pt-0 lg:pl-64">
+          <main>{children}</main>
+        </div>
       </div>
-    </div>
+    </AdminSessionGuard>
   )
 }

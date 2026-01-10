@@ -55,6 +55,7 @@ export async function POST(request: Request) {
 
       // PERFORMANCE OPTIMIZATION: Store user metadata in JWT claims
       // This reduces middleware database queries by 95%
+      // SECURITY FIX: Store session_start for server-side absolute timeout validation
       if (userData) {
         try {
           await supabase.auth.updateUser({
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
               role: userData.role,
               must_change_password: userData.must_change_password,
               is_active: userData.is_active,
+              session_start: Date.now(), // Server-side session start time
             }
           })
         } catch (e) {

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,13 +19,24 @@ const formatLoginEmail = (input: string): string => {
   return input.trim()
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [emailOrLrn, setEmailOrLrn] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  // Show session timeout message if redirected due to timeout
+  useEffect(() => {
+    const reason = searchParams.get("reason")
+    if (reason === "session_timeout") {
+      toast.info("Your session has expired due to inactivity. Please log in again.")
+      // Clean up URL
+      router.replace("/login")
+    }
+  }, [searchParams, router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -88,85 +99,99 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <GraduationCap className="h-7 w-7 text-primary-foreground" />
-            </div>
+    <Card className="w-full max-w-md">
+      <CardHeader className="text-center">
+        <div className="flex justify-center mb-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
+            <GraduationCap className="h-7 w-7 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">Welcome to LessonGo</CardTitle>
-          <CardDescription>Sign in to your account to continue</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="emailOrLrn">Email or LRN</Label>
+        </div>
+        <CardTitle className="text-2xl">Welcome to LessonGo</CardTitle>
+        <CardDescription>Sign in to your account to continue</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="emailOrLrn">Email or LRN</Label>
+            <Input
+              id="emailOrLrn"
+              type="text"
+              placeholder="Email or 12-digit LRN"
+              value={emailOrLrn}
+              onChange={(e) => setEmailOrLrn(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Students can use their 12-digit LRN to login
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
               <Input
-                id="emailOrLrn"
-                type="text"
-                placeholder="Email or 12-digit LRN"
-                value={emailOrLrn}
-                onChange={(e) => setEmailOrLrn(e.target.value)}
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <p className="text-xs text-muted-foreground">
-                Students can use their 12-digit LRN to login
-              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            {error && (
-              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
-                {error}
-              </div>
-            )}
-
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
-              ← Back to home
-            </Link>
           </div>
 
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            Contact your administrator if you need an account.
-          </p>
-        </CardContent>
-      </Card>
+          {error && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : (
+              "Sign In"
+            )}
+          </Button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+            ← Back to home
+          </Link>
+        </div>
+
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Contact your administrator if you need an account.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Suspense fallback={
+        <Card className="w-full max-w-md">
+          <CardContent className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      }>
+        <LoginForm />
+      </Suspense>
     </div>
   )
 }

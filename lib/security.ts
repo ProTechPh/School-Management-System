@@ -1,6 +1,17 @@
 import 'server-only'
 import { z } from "zod"
 import { NextRequest, NextResponse } from "next/server"
+import crypto from "crypto"
+
+/**
+ * Hash an IP address for privacy-preserving storage
+ * Uses SHA-256 with a salt to prevent rainbow table attacks
+ * while still allowing abuse detection via hash comparison
+ */
+export function hashIpAddress(ip: string): string {
+  const salt = process.env.IP_HASH_SALT || process.env.QR_SECRET || 'default-ip-salt'
+  return crypto.createHash('sha256').update(ip + salt).digest('hex').slice(0, 32)
+}
 
 /**
  * Validates that the request originated from the same domain.

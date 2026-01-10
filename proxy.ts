@@ -3,6 +3,11 @@ import { NextResponse, type NextRequest } from "next/server"
 import { validateOrigin } from "@/lib/security"
 
 /**
+ * Session timeout constants
+ */
+const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000
+
+/**
  * 安全响应头配置
  * Security headers to protect against common web vulnerabilities
  */
@@ -144,6 +149,27 @@ export async function proxy(request: NextRequest) {
          return NextResponse.json({ error: "Account disabled" }, { status: 403 })
       }
       return NextResponse.redirect(new URL("/login?error=account_disabled", request.url))
+    }
+
+    // SECURITY FIX: Enforce Absolute Session Timeout (server-side validation)
+    const sessionStart = user.user_metadata?.session_start as number | undefined
+    if (sessionStart) {
+      const sessionAge = Date.now() - sessionStart
+
+      if (sessionAge > EIGHT_HOURS_MS) {
+        // Session expired - sign out and redirect
+        await supabase.auth.signOut()
+
+        if (isApiRoute) {
+          return applySecurityHeaders(
+            NextResponse.json({ error: "Session expired" }, { status: 401 })
+          )
+        }
+
+        return applySecurityHeaders(
+          NextResponse.redirect(new URL("/login?reason=session_timeout", request.url))
+        )
+      }
     }
 
     // Enforce Password Change Policy

@@ -4,16 +4,43 @@ import { checkRateLimit } from "@/lib/rate-limit"
 import { getClientIp, validateOrigin } from "@/lib/security"
 import { handleApiError, ApiErrors } from "@/lib/api-errors"
 import { z } from "zod"
+import DOMPurify from "isomorphic-dompurify"
 
 // Validation schema for chat messages
 const sendMessageSchema = z.object({
   receiverId: z.string().uuid("Invalid receiver ID"),
   content: z.string()
     .min(1, "Message cannot be empty")
-    .max(5000, "Message too long")
-    // Basic XSS prevention - strip script tags
-    .refine(val => !/<script/i.test(val), "Invalid content"),
+    .max(5000, "Message too long"),
 })
+
+// DOMPurify configuration - allow basic formatting only
+const DOMPURIFY_CONFIG = {
+  ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'br', 'p', 'ul', 'ol', 'li'],
+  ALLOWED_ATTR: ['href', 'target', 'rel'],
+  ALLOW_DATA_ATTR: false,
+  // Force all links to open in new tab with noopener
+  ADD_ATTR: ['target', 'rel'],
+}
+
+/**
+ * Sanitize chat message content to prevent XSS while allowing basic formatting
+ */
+function sanitizeContent(content: string): string {
+  // First pass: sanitize HTML
+  let sanitized = DOMPurify.sanitize(content, DOMPURIFY_CONFIG)
+  
+  // Force safe link attributes on any remaining anchor tags
+  sanitized = sanitized.replace(
+    /<a\s+href="([^"]+)"[^>]*>/gi,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">'
+  )
+  
+  // Block javascript: URLs that might have slipped through
+  sanitized = sanitized.replace(/href="javascript:[^"]*"/gi, 'href="#"')
+  
+  return sanitized
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -82,6 +109,9 @@ export async function POST(request: NextRequest) {
 
     const { receiverId, content } = validationResult.data
 
+    // SECURITY FIX: Sanitize content with DOMPurify to prevent XSS
+    const sanitizedContent = sanitizeContent(content)
+
     // Verify receiver exists
     const { data: receiver } = await supabase
       .from("users")
@@ -98,7 +128,7 @@ export async function POST(request: NextRequest) {
       .insert({
         sender_id: user.id,
         receiver_id: receiverId,
-        content,
+        content: sanitizedContent, // Use sanitized content
         read: false,
       })
       .select("id")

@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { getClientIp } from "@/lib/security"
+import { getClientIp, hashIpAddress } from "@/lib/security"
 
 // Haversine formula to calculate distance
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -51,12 +51,14 @@ export async function POST(request: Request) {
     // If NOT on school network (and not strictly enforced), apply STRICT limits
     if (!isSchoolNetwork) {
       // Check how many DISTINCT students have used this IP in the last 15 minutes
+      // SECURITY FIX: Use hashed IP for privacy-preserving abuse detection
+      const hashedIp = hashIpAddress(ip)
       const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
       
       const { data: recentCheckins } = await supabase
         .from("qr_checkins")
         .select("student_id")
-        .eq("ip_address", ip)
+        .eq("ip_hash", hashedIp)
         .gte("created_at", fifteenMinutesAgo)
       
       const distinctStudents = new Set(recentCheckins?.map(c => c.student_id))
@@ -188,14 +190,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // 8. Perform Insert
+    // 8. Perform Insert with hashed IP for privacy
+    const hashedIp = hashIpAddress(ip)
     const { error: insertError } = await supabase
       .from("qr_checkins")
       .insert({
         session_id: sessionId,
         student_id: user.id,
         location_verified: session.require_location,
-        ip_address: ip
+        ip_hash: hashedIp // Store hashed IP instead of raw IP
       })
 
     if (insertError) throw insertError
