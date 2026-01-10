@@ -6,9 +6,10 @@ import { StatCard } from "@/components/stat-card"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { BookOpen, Users, ClipboardCheck, Calendar, Loader2 } from "lucide-react"
+import { BookOpen, Users, ClipboardCheck, Calendar, Loader2, Video } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { UpcomingMeetingsWidget } from "@/components/upcoming-meetings-widget"
 
 interface ClassInfo {
   id: string
@@ -142,31 +143,35 @@ export default function TeacherDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="bg-card">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Today&apos;s Schedule</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {todaySchedule.length > 0 ? (
-                <div className="space-y-3">
-                  {todaySchedule.map((item) => (
-                    <div key={item.id} className="flex items-center gap-4 rounded-lg border border-border bg-muted/30 p-3">
-                      <div className="text-center">
-                        <p className="text-lg font-bold text-primary">{item.start_time}</p>
-                        <p className="text-xs text-muted-foreground">{item.end_time}</p>
+          <div className="space-y-6">
+            <UpcomingMeetingsWidget userId={userId} userRole="teacher" limit={3} />
+
+            <Card className="bg-card">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">Today&apos;s Schedule</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {todaySchedule.length > 0 ? (
+                  <div className="space-y-3">
+                    {todaySchedule.map((item) => (
+                      <div key={item.id} className="flex items-center gap-4 rounded-lg border border-border bg-muted/30 p-3">
+                        <div className="text-center">
+                          <p className="text-lg font-bold text-primary">{item.start_time}</p>
+                          <p className="text-xs text-muted-foreground">{item.end_time}</p>
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-card-foreground">{item.class_name}</p>
+                          <p className="text-sm text-muted-foreground">{item.room || "TBA"}</p>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-card-foreground">{item.class_name}</p>
-                        <p className="text-sm text-muted-foreground">{item.room || "TBA"}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No classes scheduled for today</p>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No classes scheduled for today</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           <Card className="bg-card lg:col-span-2">
             <CardHeader>
