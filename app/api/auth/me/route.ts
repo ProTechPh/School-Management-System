@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     // This allows us to disable public SELECT access on the 'users' table
     const { data: userData, error } = await supabase
       .from("users")
-      .select("id, name, avatar, role")
+      .select("id, name, email, avatar, role")
       .eq("id", user.id)
       .single()
 
