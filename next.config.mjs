@@ -55,13 +55,12 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
+            // Note: 'unsafe-inline' is required for Next.js hydration scripts
+            // 'unsafe-eval' removed - not needed for production builds
+            // For maximum security, consider implementing nonce-based CSP in middleware
             value: [
               "default-src 'self'",
-              // SECURITY: Removed 'unsafe-eval' and 'unsafe-inline' for better XSS protection
-              // Note: This may require testing - some features might need adjustment
-              "script-src 'self' https://vercel.live https://va.vercel-scripts.com",
-              // Style-src still needs unsafe-inline for CSS-in-JS libraries (Tailwind, etc.)
-              // Consider using nonces in the future for better security
+              "script-src 'self' 'unsafe-inline' https://vercel.live https://va.vercel-scripts.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
