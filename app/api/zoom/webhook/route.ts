@@ -94,6 +94,34 @@ export async function POST(request: NextRequest) {
           .update({ status: "ended", updated_at: new Date().toISOString() })
           .eq("id", meeting.id)
         
+        // Update all participants still marked as "joined" to "left"
+        const endTime = new Date().toISOString()
+        const { data: stillJoined } = await supabase
+          .from("zoom_participants")
+          .select("id, user_id, join_time, duration")
+          .eq("meeting_id", meeting.id)
+          .eq("status", "joined")
+
+        if (stillJoined && stillJoined.length > 0) {
+          for (const participant of stillJoined) {
+            let finalDuration = participant.duration || 0
+            if (participant.join_time) {
+              finalDuration += Math.floor(
+                (new Date(endTime).getTime() - new Date(participant.join_time).getTime()) / 1000
+              )
+            }
+            
+            await supabase
+              .from("zoom_participants")
+              .update({
+                leave_time: endTime,
+                duration: finalDuration,
+                status: "left",
+              })
+              .eq("id", participant.id)
+          }
+        }
+        
         // Process final attendance when meeting ends
         if (meeting.class_id) {
           await processFinalAttendance(supabase, meeting.id, meeting.class_id, meeting.start_time)
@@ -127,50 +155,85 @@ export async function POST(request: NextRequest) {
       case "meeting.participant_left":
         const leftParticipant = event.payload?.object?.participant
         if (leftParticipant) {
-          const { data: existingUser } = await supabase
-            .from("users")
-            .select("id, role")
-            .eq("email", leftParticipant.email)
-            .single()
+          const leaveTime = leftParticipant.leave_time || new Date().toISOString()
+          
+          // Try to find the participant record - first by email, then by zoom_participant_id
+          let participantRecord = null
+          let matchedUserId = null
 
-          if (existingUser) {
-            const { data: participantRecord } = await supabase
-              .from("zoom_participants")
-              .select("join_time, duration")
-              .eq("meeting_id", meeting.id)
-              .eq("user_id", existingUser.id)
+          // Try matching by email first
+          if (leftParticipant.email) {
+            const { data: existingUser } = await supabase
+              .from("users")
+              .select("id, role")
+              .eq("email", leftParticipant.email)
               .single()
 
+            if (existingUser) {
+              matchedUserId = existingUser.id
+              const { data: record } = await supabase
+                .from("zoom_participants")
+                .select("id, join_time, duration")
+                .eq("meeting_id", meeting.id)
+                .eq("user_id", existingUser.id)
+                .single()
+              participantRecord = record
+            }
+          }
+
+          // Fallback: try matching by zoom_participant_id
+          if (!participantRecord && leftParticipant.user_id) {
+            const { data: record } = await supabase
+              .from("zoom_participants")
+              .select("id, user_id, join_time, duration")
+              .eq("meeting_id", meeting.id)
+              .eq("zoom_participant_id", leftParticipant.user_id)
+              .single()
+            
+            if (record) {
+              participantRecord = record
+              matchedUserId = record.user_id
+            }
+          }
+
+          if (participantRecord) {
             let sessionDuration = 0
-            if (participantRecord?.join_time && leftParticipant.leave_time) {
+            if (participantRecord.join_time) {
               sessionDuration = Math.floor(
-                (new Date(leftParticipant.leave_time).getTime() - 
+                (new Date(leaveTime).getTime() - 
                  new Date(participantRecord.join_time).getTime()) / 1000
               )
             }
 
             // Accumulate duration (in case of multiple join/leave)
-            const totalDuration = (participantRecord?.duration || 0) + sessionDuration
+            const totalDuration = (participantRecord.duration || 0) + sessionDuration
 
             await supabase
               .from("zoom_participants")
               .update({
-                leave_time: leftParticipant.leave_time,
+                leave_time: leaveTime,
                 duration: totalDuration,
                 status: "left",
               })
-              .eq("meeting_id", meeting.id)
-              .eq("user_id", existingUser.id)
+              .eq("id", participantRecord.id)
 
             // Update attendance based on duration for students
-            if (existingUser.role === "student" && meeting.class_id) {
-              await updateStudentAttendance(
-                supabase, 
-                existingUser.id, 
-                meeting.class_id, 
-                meeting.start_time, 
-                totalDuration
-              )
+            if (matchedUserId && meeting.class_id) {
+              const { data: userData } = await supabase
+                .from("users")
+                .select("role")
+                .eq("id", matchedUserId)
+                .single()
+
+              if (userData?.role === "student") {
+                await updateStudentAttendance(
+                  supabase, 
+                  matchedUserId, 
+                  meeting.class_id, 
+                  meeting.start_time, 
+                  totalDuration
+                )
+              }
             }
           }
         }
