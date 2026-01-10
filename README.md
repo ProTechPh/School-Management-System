@@ -1,3 +1,5 @@
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/ProTechPh/School-Management-System?utm_source=oss&utm_medium=github&utm_campaign=ProTechPh%2FSchool-Management-System&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 # LessonGo - School Management System
 
 A comprehensive school management system with role-based dashboards for administrators, teachers, students, and parents.
