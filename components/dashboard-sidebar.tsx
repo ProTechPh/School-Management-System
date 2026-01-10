@@ -21,6 +21,7 @@ import {
   User,
   Menu,
   Shield,
+  Video,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -48,6 +49,7 @@ const adminLinks = [
   { href: "/admin/quizzes", label: "Quizzes", icon: FileQuestion },
   { href: "/admin/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/admin/grades", label: "Grades", icon: Calendar },
+  { href: "/admin/meetings", label: "Zoom Meetings", icon: Video },
   { href: "/admin/calendar", label: "Calendar", icon: Calendar },
   { href: "/admin/schedule", label: "Schedule", icon: Calendar },
   { href: "/admin/chat", label: "Messages", icon: MessageCircle },
@@ -67,6 +69,7 @@ const teacherLinks = [
   { href: "/teacher/qr-attendance", label: "QR Attendance", icon: QrCode },
   { href: "/teacher/grades", label: "Grades", icon: Calendar },
   { href: "/teacher/analytics", label: "Analytics", icon: Users },
+  { href: "/teacher/meetings", label: "Zoom Meetings", icon: Video },
   { href: "/teacher/calendar", label: "Calendar", icon: Calendar },
   { href: "/teacher/schedule", label: "Schedule", icon: Calendar },
   { href: "/teacher/chat", label: "Messages", icon: MessageCircle },
@@ -82,6 +85,7 @@ const studentLinks = [
   { href: "/student/assignments", label: "Assignments", icon: FileText },
   { href: "/student/grades", label: "My Grades", icon: Calendar },
   { href: "/student/analytics", label: "Progress", icon: Users },
+  { href: "/student/meetings", label: "Zoom Meetings", icon: Video },
   { href: "/student/calendar", label: "Calendar", icon: Calendar },
   { href: "/student/schedule", label: "Schedule", icon: Calendar },
   { href: "/student/attendance", label: "Attendance", icon: ClipboardCheck },
@@ -94,6 +98,7 @@ const parentLinks = [
   { href: "/parent", label: "Dashboard", icon: LayoutDashboard },
   { href: "/parent/grades", label: "Grades", icon: Calendar },
   { href: "/parent/attendance", label: "Attendance", icon: ClipboardCheck },
+  { href: "/parent/meetings", label: "Zoom Meetings", icon: Video },
   { href: "/parent/calendar", label: "Calendar", icon: Calendar },
   { href: "/parent/chat", label: "Messages", icon: MessageCircle },
   { href: "/parent/announcements", label: "Announcements", icon: Megaphone },

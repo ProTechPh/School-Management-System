@@ -1,4 +1,4 @@
-# EduManager - School Management System
+# LessonGo - School Management System
 
 A comprehensive school management system with role-based dashboards for administrators, teachers, students, and parents.
 
