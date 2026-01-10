@@ -1,10 +1,17 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { 
   GraduationCap, 
   LogIn, 
@@ -16,42 +23,68 @@ import {
   QrCode,
   MessageSquare,
   Shield,
-  ArrowRight
+  ArrowRight,
+  LayoutDashboard,
+  User,
+  LogOut,
+  ChevronDown
 } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+
+interface UserData {
+  id: string
+  email?: string
+  role: string
+  name?: string
+  avatar?: string
+}
 
 export default function HomePage() {
-  const router = useRouter()
-  const [checking, setChecking] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<UserData | null>(null)
+  const supabase = createClient()
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Use secure API route instead of direct DB query
         const response = await fetch("/api/auth/me")
         
         if (response.ok) {
           const { user: userData } = await response.json()
-          if (userData?.role) {
-            router.push(`/${userData.role}`)
-            return
+          if (userData) {
+            setUser(userData)
           }
         }
       } catch (error) {
-        // Ignore errors, user is likely not logged in
+        // User not logged in
       } finally {
-        setChecking(false)
+        setLoading(false)
       }
     }
 
     checkAuth()
-  }, [router])
+  }, [])
 
-  if (checking) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+    window.location.href = "/login"
+  }
+
+  const getInitials = (name?: string, email?: string) => {
+    if (name) {
+      return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+    }
+    return email?.charAt(0).toUpperCase() || "U"
+  }
+
+  const getDashboardPath = (role?: string) => {
+    switch (role) {
+      case "admin": return "/admin"
+      case "teacher": return "/teacher"
+      case "parent": return "/parent"
+      default: return "/student"
+    }
   }
 
   const features = [
@@ -106,6 +139,14 @@ export default function HomePage() {
     { value: "RLS", label: "Security" }
   ]
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-background overflow-hidden">
       {/* Gradient Background */}
@@ -124,12 +165,56 @@ export default function HomePage() {
             </div>
             <span className="text-xl font-bold text-foreground">LessonGo</span>
           </div>
-          <Button size="sm" asChild>
-            <Link href="/login">
-              <LogIn className="mr-2 h-4 w-4" />
-              Sign in
-            </Link>
-          </Button>
+          
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center gap-2 px-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.avatar} alt={user.name || user.email} />
+                    <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                      {getInitials(user.name, user.email)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden sm:inline-block text-sm font-medium">
+                    {user.name || user.email}
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-medium">{user.name || "User"}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href={getDashboardPath(user.role)} className="cursor-pointer">
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    Dashboard
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={`${getDashboardPath(user.role)}/profile`} className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button size="sm" asChild>
+              <Link href="/login">
+                <LogIn className="mr-2 h-4 w-4" />
+                Sign in
+              </Link>
+            </Button>
+          )}
         </div>
       </nav>
 
@@ -151,12 +236,21 @@ export default function HomePage() {
             Streamline attendance, grades, communication, and more.
           </p>
           
-          <Button size="lg" className="h-12 px-8 text-base" asChild>
-            <Link href="/login">
-              <LogIn className="mr-2 h-5 w-5" />
-              Sign in
-            </Link>
-          </Button>
+          {user ? (
+            <Button size="lg" className="h-12 px-8 text-base" asChild>
+              <Link href={getDashboardPath(user.role)}>
+                <LayoutDashboard className="mr-2 h-5 w-5" />
+                Go to Dashboard
+              </Link>
+            </Button>
+          ) : (
+            <Button size="lg" className="h-12 px-8 text-base" asChild>
+              <Link href="/login">
+                <LogIn className="mr-2 h-5 w-5" />
+                Sign in
+              </Link>
+            </Button>
+          )}
         </div>
 
         {/* Stats */}
@@ -266,12 +360,21 @@ export default function HomePage() {
             <p className="text-muted-foreground text-lg mb-8 max-w-xl mx-auto">
               Contact the DMNHS administrator to get your account set up.
             </p>
-            <Button size="lg" className="h-12 px-8" asChild>
-              <Link href="/login">
-                Sign in to your account
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+            {user ? (
+              <Button size="lg" className="h-12 px-8" asChild>
+                <Link href={getDashboardPath(user.role)}>
+                  Go to your dashboard
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+            ) : (
+              <Button size="lg" className="h-12 px-8" asChild>
+                <Link href="/login">
+                  Sign in to your account
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </section>

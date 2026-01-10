@@ -198,6 +198,24 @@ export async function proxy(request: NextRequest) {
     return applySecurityHeaders(NextResponse.redirect(new URL("/login", request.url)))
   }
 
+  // Auth routes - redirect logged-in users away from login/register
+  const authRoutes = ["/login", "/register"]
+  const isAuthRoute = authRoutes.some(
+    (route) => request.nextUrl.pathname === route || request.nextUrl.pathname.startsWith(`${route}/`)
+  )
+
+  if (user && isAuthRoute) {
+    // Get user role and redirect to appropriate dashboard
+    const role = user.user_metadata?.role || "student"
+    let redirectPath = "/student" // default
+    
+    if (role === "admin") redirectPath = "/admin"
+    else if (role === "teacher") redirectPath = "/teacher"
+    else if (role === "parent") redirectPath = "/parent"
+    
+    return applySecurityHeaders(NextResponse.redirect(new URL(redirectPath, request.url)))
+  }
+
   // Ensure security headers are applied to final response
   return applySecurityHeaders(response)
 }
@@ -207,9 +225,11 @@ export const config = {
     "/admin/:path*",
     "/teacher/:path*",
     "/student/:path*",
+    "/parent/:path*",
     "/test-supabase/:path*",
     "/change-password",
     "/login",
+    "/register",
     "/auth/mfa/:path*",
     "/api/:path*"
   ],
