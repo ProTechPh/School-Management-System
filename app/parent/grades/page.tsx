@@ -137,8 +137,8 @@ export default function ParentGradesPage() {
                           border: "1px solid hsl(var(--border))",
                           borderRadius: "8px",
                         }}
-                        formatter={(value: number, _name: string, props: any) => [
-                          `${value}%`,
+                        formatter={(value: number | undefined, _name: string, props: any) => [
+                          `${value ?? 0}%`,
                           `${props.payload.subject} (${props.payload.type})`
                         ]}
                       />
