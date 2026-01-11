@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     const validation = settingsSchema.safeParse(body)
     if (!validation.success) {
       return NextResponse.json({ 
-        error: "Invalid settings: " + validation.error.errors.map(e => e.message).join(", ") 
+        error: "Invalid settings: " + validation.error.issues.map(e => e.message).join(", ") 
       }, { status: 400 })
     }
 

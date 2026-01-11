@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     // SECURITY: Validate input
     const validationResult = sendMessageSchema.safeParse(body)
     if (!validationResult.success) {
-      return ApiErrors.badRequest(validationResult.error.errors[0]?.message || "Invalid input")
+      return ApiErrors.badRequest(validationResult.error.issues[0]?.message || "Invalid input")
     }
 
     const { receiverId, content } = validationResult.data

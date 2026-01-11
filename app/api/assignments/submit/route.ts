@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     const validationResult = submissionSchema.safeParse(body)
 
     if (!validationResult.success) {
-      return ApiErrors.badRequest(validationResult.error.errors[0]?.message || "Invalid submission data")
+      return ApiErrors.badRequest(validationResult.error.issues[0]?.message || "Invalid submission data")
     }
 
     const { assignmentId, comment, files } = validationResult.data

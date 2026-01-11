@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const validation = quizSchema.safeParse(body)
     
     if (!validation.success) {
-      const errorMessage = validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(", ")
+      const errorMessage = validation.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(", ")
       return NextResponse.json({ error: errorMessage }, { status: 400 })
     }
 

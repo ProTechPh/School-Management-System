@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const validationResult = profileUpdateSchema.safeParse(body)
     
     if (!validationResult.success) {
-      return NextResponse.json({ error: validationResult.error.errors[0].message }, { status: 400 })
+      return NextResponse.json({ error: validationResult.error.issues[0].message }, { status: 400 })
     }
 
     const validatedData = validationResult.data
