@@ -14,7 +14,6 @@ import {
   FileQuestion,
   FileText,
   Megaphone,
-  MessageCircle,
   QrCode,
   Settings,
   UserPlus,
@@ -52,7 +51,6 @@ const adminLinks = [
   { href: "/admin/meetings", label: "Zoom Meetings", icon: Video },
   { href: "/admin/calendar", label: "Calendar", icon: Calendar },
   { href: "/admin/schedule", label: "Schedule", icon: Calendar },
-  { href: "/admin/chat", label: "Messages", icon: MessageCircle },
   { href: "/admin/audit-logs", label: "Audit Logs", icon: Shield },
   { href: "/admin/profile", label: "My Profile", icon: User },
   { href: "/admin/settings", label: "Settings", icon: Settings },
@@ -72,7 +70,6 @@ const teacherLinks = [
   { href: "/teacher/meetings", label: "Zoom Meetings", icon: Video },
   { href: "/teacher/calendar", label: "Calendar", icon: Calendar },
   { href: "/teacher/schedule", label: "Schedule", icon: Calendar },
-  { href: "/teacher/chat", label: "Messages", icon: MessageCircle },
   { href: "/teacher/profile", label: "My Profile", icon: User },
 ]
 
@@ -90,7 +87,6 @@ const studentLinks = [
   { href: "/student/schedule", label: "Schedule", icon: Calendar },
   { href: "/student/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/student/qr-checkin", label: "QR Check-in", icon: QrCode },
-  { href: "/student/chat", label: "Messages", icon: MessageCircle },
   { href: "/student/profile", label: "My Profile", icon: User },
 ]
 
@@ -100,7 +96,6 @@ const parentLinks = [
   { href: "/parent/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/parent/meetings", label: "Zoom Meetings", icon: Video },
   { href: "/parent/calendar", label: "Calendar", icon: Calendar },
-  { href: "/parent/chat", label: "Messages", icon: MessageCircle },
   { href: "/parent/announcements", label: "Announcements", icon: Megaphone },
 ]
 

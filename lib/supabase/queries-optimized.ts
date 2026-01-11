@@ -227,46 +227,6 @@ export async function getGradesOptimized(
 }
 
 // ============================================================================
-// CHAT QUERIES (Optimized with pagination)
-// ============================================================================
-
-export async function getChatMessagesOptimized(
-  userId: string,
-  params: PaginationParams = {}
-) {
-  const { page = 1, pageSize = 50 } = params
-  const from = (page - 1) * pageSize
-  const to = from + pageSize - 1
-
-  const supabase = createClient()
-  const { data, error, count } = await supabase
-    .from("chat_messages")
-    .select(
-      `
-      id, content, created_at, read, sender_id, receiver_id,
-      sender:users!chat_messages_sender_id_fkey (id, name, role, avatar),
-      receiver:users!chat_messages_receiver_id_fkey (id, name, role, avatar)
-    `,
-      { count: "exact" }
-    )
-    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-    .order("created_at", { ascending: false })
-    .range(from, to)
-
-  if (error) throw error
-
-  return {
-    data,
-    pagination: {
-      page,
-      pageSize,
-      total: count || 0,
-      totalPages: Math.ceil((count || 0) / pageSize),
-    },
-  }
-}
-
-// ============================================================================
 // DASHBOARD AGGREGATION QUERIES
 // ============================================================================
 

@@ -188,13 +188,11 @@ export interface Notification {
     | "quiz"
     | "lesson"
     | "announcement"
-    | "chat"
   read: boolean
   link?: string
   createdAt: string
 }
 
-// New interfaces for Announcement, Chat, and QR Attendance
 export interface Announcement {
   id: string
   title: string
@@ -206,33 +204,6 @@ export interface Announcement {
   priority: "normal" | "important" | "urgent"
   createdAt: string
   expiresAt?: string
-}
-
-export interface ChatMessage {
-  id: string
-  senderId: string
-  senderName: string
-  senderRole: UserRole
-  senderAvatar: string
-  receiverId: string
-  receiverName: string
-  receiverRole: UserRole
-  content: string
-  createdAt: string
-  read: boolean
-}
-
-export interface ChatConversation {
-  id: string
-  participants: {
-    id: string
-    name: string
-    role: UserRole
-    avatar: string
-  }[]
-  lastMessage: string
-  lastMessageAt: string
-  unreadCount: number
 }
 
 export interface QRAttendanceSession {
@@ -1313,62 +1284,6 @@ export const announcements: Announcement[] = [
     targetAudience: "teachers",
     priority: "normal",
     createdAt: "2024-12-15T08:00:00Z",
-  },
-]
-
-// Mock chat messages
-export const chatMessages: ChatMessage[] = [
-  {
-    id: "msg1",
-    senderId: "t1",
-    senderName: "Teacher One",
-    senderRole: "teacher",
-    senderAvatar: "/placeholder-user.jpg",
-    receiverId: "s1",
-    receiverName: "Student One",
-    receiverRole: "student",
-    content: "Great job on your last math quiz! Keep up the excellent work.",
-    createdAt: "2024-12-18T10:30:00Z",
-    read: true,
-  },
-  {
-    id: "msg2",
-    senderId: "s1",
-    senderName: "Student One",
-    senderRole: "student",
-    senderAvatar: "/placeholder-user.jpg",
-    receiverId: "t1",
-    receiverName: "Teacher One",
-    receiverRole: "teacher",
-    content: "Thank you! I studied really hard for it.",
-    createdAt: "2024-12-18T10:35:00Z",
-    read: true,
-  },
-  {
-    id: "msg3",
-    senderId: "t2",
-    senderName: "Teacher Two",
-    senderRole: "teacher",
-    senderAvatar: "/placeholder-user.jpg",
-    receiverId: "s4",
-    receiverName: "Student Four",
-    receiverRole: "student",
-    content: "Don't forget to submit your physics lab report by Friday.",
-    createdAt: "2024-12-18T09:15:00Z",
-    read: false,
-  },
-  {
-    id: "msg4",
-    senderId: "admin",
-    senderName: "Admin",
-    senderRole: "admin",
-    senderAvatar: "/placeholder.svg",
-    receiverId: "t1",
-    receiverName: "Teacher One",
-    receiverRole: "teacher",
-    content: "Please submit your grade reports by end of day Friday.",
-    createdAt: "2024-12-17T16:00:00Z",
-    read: true,
   },
 ]
 

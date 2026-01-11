@@ -12,7 +12,6 @@ import {
   Info,
   AlertTriangle,
   FileText,
-  MessageCircle,
   Megaphone,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -36,7 +35,6 @@ const typeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   quiz: BookOpen,
   lesson: FileText,
   announcement: Megaphone,
-  chat: MessageCircle,
 }
 
 const typeColors: Record<string, string> = {
@@ -49,7 +47,6 @@ const typeColors: Record<string, string> = {
   quiz: "text-indigo-500",
   lesson: "text-cyan-500",
   announcement: "text-pink-500",
-  chat: "text-violet-500",
 }
 
 function formatTimeAgo(dateString: string) {

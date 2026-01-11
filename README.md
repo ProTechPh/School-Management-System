@@ -112,7 +112,6 @@ pnpm start
 - **Recharts** - Data visualization and charts
 - **date-fns** - Date manipulation and formatting
 - **Lucide React** - Icon library
-- **Vercel AI SDK** - AI chat integration
 
 ## 📁 Project Structure
 

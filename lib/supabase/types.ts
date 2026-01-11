@@ -209,21 +209,12 @@ export interface DbAnnouncement {
   created_at: string
 }
 
-export interface DbChatMessage {
-  id: string
-  sender_id: string | null
-  receiver_id: string | null
-  content: string
-  read: boolean
-  created_at: string
-}
-
 export interface DbNotification {
   id: string
   user_id: string | null
   title: string
   message: string
-  type: "info" | "success" | "warning" | "assignment" | "grade" | "attendance" | "quiz" | "lesson" | "announcement" | "chat"
+  type: "info" | "success" | "warning" | "assignment" | "grade" | "attendance" | "quiz" | "lesson" | "announcement"
   read: boolean
   link: string | null
   created_at: string

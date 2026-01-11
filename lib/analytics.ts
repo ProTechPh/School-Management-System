@@ -32,9 +32,6 @@ export type AnalyticsEvent =
   | 'class_create'
   | 'class_update'
   | 'enrollment_add'
-  // AI Assistant
-  | 'ai_chat_message'
-  | 'ai_chat_session_start'
   // Dashboard
   | 'dashboard_view'
   | 'report_generate'

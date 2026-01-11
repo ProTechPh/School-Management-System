@@ -10,7 +10,7 @@ interface Notification {
   user_id: string | null
   title: string
   message: string
-  type: "info" | "success" | "warning" | "assignment" | "grade" | "attendance" | "quiz" | "lesson" | "announcement" | "chat"
+  type: "info" | "success" | "warning" | "assignment" | "grade" | "attendance" | "quiz" | "lesson" | "announcement"
   read: boolean
   link: string | null
   created_at: string
@@ -23,7 +23,7 @@ interface LegacyNotification {
   userRole: UserRole
   title: string
   message: string
-  type: "info" | "success" | "warning" | "assignment" | "grade" | "attendance" | "quiz" | "lesson" | "announcement" | "chat"
+  type: "info" | "success" | "warning" | "assignment" | "grade" | "attendance" | "quiz" | "lesson" | "announcement"
   read: boolean
   link?: string
   createdAt: string

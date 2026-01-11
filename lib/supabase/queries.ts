@@ -346,22 +346,6 @@ export async function getNotifications(userId: string) {
   return data
 }
 
-// Chat queries
-export async function getChatMessages(userId: string) {
-  const supabase = createClient()
-  const { data, error } = await supabase
-    .from("chat_messages")
-    .select(`
-      *,
-      sender:users!chat_messages_sender_id_fkey (id, name, role, avatar),
-      receiver:users!chat_messages_receiver_id_fkey (id, name, role, avatar)
-    `)
-    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-    .order("created_at", { ascending: false })
-  if (error) throw error
-  return data
-}
-
 // School settings
 export async function getSchoolSettings() {
   const supabase = createClient()
