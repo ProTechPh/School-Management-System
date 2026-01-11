@@ -1,0 +1,57 @@
+# Dependabot configuration for LessonGo School Management System
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # NPM dependencies (Next.js, React, Supabase, etc.)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Manila"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "ProTechPh"
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Group minor/patch updates to reduce PR noise
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "react-hook-form"
+      next:
+        patterns:
+          - "next"
+          - "next-themes"
+      supabase:
+        patterns:
+          - "@supabase/*"
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Manila"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
