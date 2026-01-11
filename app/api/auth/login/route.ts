@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { getClientIp } from "@/lib/security"
+import { createSession, SESSION_CONFIG, type ClientFingerprint } from "@/lib/session-security"
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +20,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const { email, password } = await request.json()
+    const { email, password, fingerprint } = await request.json() as {
+      email: string
+      password: string
+      fingerprint?: ClientFingerprint
+    }
     
     const supabase = await createClient()
     
@@ -72,11 +77,37 @@ export async function POST(request: Request) {
         }
       }
 
-      // Return success with user role for client-side analytics
-      return NextResponse.json({ 
+      // SESSION SECURITY: Create session binding with fingerprint
+      let sessionToken: string | null = null
+      let isNewDevice = false
+
+      if (fingerprint) {
+        const sessionResult = await createSession(data.user.id, fingerprint, ip)
+        if (sessionResult) {
+          sessionToken = sessionResult.sessionToken
+          isNewDevice = sessionResult.isNewDevice
+        }
+      }
+
+      // Create response with session binding cookie
+      const response = NextResponse.json({ 
         user: data.user,
-        role: userData?.role 
+        role: userData?.role,
+        isNewDevice,
       })
+
+      // Set session binding cookie (HttpOnly, Secure, SameSite)
+      if (sessionToken) {
+        response.cookies.set(SESSION_CONFIG.SESSION_BINDING_COOKIE, sessionToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 60 * 60 * 8, // 8 hours (matches session timeout)
+        })
+      }
+
+      return response
     }
 
     return NextResponse.json({ user: data.user })

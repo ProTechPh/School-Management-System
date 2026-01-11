@@ -1,5 +1,7 @@
 import { create } from "zustand"
 import { createClient } from "@/lib/supabase/client"
+import { clearSessionToken } from "@/lib/fingerprint"
+import { setupFingerprintInterceptor } from "@/lib/secure-fetch"
 import type { User } from "@supabase/supabase-js"
 
 interface UserProfile {
@@ -45,6 +47,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       authSubscription = null
     }
 
+    // Setup fingerprint interceptor for session security
+    setupFingerprintInterceptor()
+
     const supabase = createClient()
     
     const { data: { user } } = await supabase.auth.getUser()
@@ -79,6 +84,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     const supabase = createClient()
+    
+    // Clear session binding token
+    clearSessionToken()
+    
+    // Call logout API to invalidate server-side session
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // Continue with client-side logout even if API fails
+    }
+    
     await supabase.auth.signOut()
     set({ user: null, profile: null })
   },

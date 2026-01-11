@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { clearSessionToken } from "@/lib/fingerprint"
 
 interface SessionTimeoutConfig {
   inactivityTimeout: number // in milliseconds
@@ -49,6 +50,16 @@ export function useSessionTimeout(config: SessionTimeoutConfig): UseSessionTimeo
 
     // Clear session storage
     sessionStorage.removeItem(LAST_ACTIVITY_KEY)
+    
+    // Clear session binding token
+    clearSessionToken()
+
+    // Call logout API to invalidate server-side session
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // Continue with logout even if API fails
+    }
 
     // Sign out from Supabase
     const supabase = createClient()

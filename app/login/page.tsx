@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { GraduationCap, Loader2, Eye, EyeOff } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { trackUserAction } from "@/lib/analytics"
+import { generateFingerprint, storeSessionToken } from "@/lib/fingerprint"
 import Link from "next/link"
 
 const formatLoginEmail = (input: string): string => {
@@ -33,7 +34,9 @@ function LoginForm() {
     const reason = searchParams.get("reason")
     if (reason === "session_timeout") {
       toast.info("Your session has expired due to inactivity. Please log in again.")
-      // Clean up URL
+      router.replace("/login")
+    } else if (reason === "session_invalid") {
+      toast.error("Your session was invalidated for security reasons. Please log in again.")
       router.replace("/login")
     }
   }, [searchParams, router])
@@ -46,17 +49,25 @@ function LoginForm() {
     const email = formatLoginEmail(emailOrLrn)
 
     try {
+      // Generate browser fingerprint for session binding
+      const fingerprint = generateFingerprint()
+      
       // Use secure API route with rate limiting
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, fingerprint }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
         throw new Error(data.error || "Login failed")
+      }
+
+      // Show new device notification if applicable
+      if (data.isNewDevice) {
+        toast.info("New device detected. This login has been recorded.")
       }
 
       // Login successful, check user role/password policy

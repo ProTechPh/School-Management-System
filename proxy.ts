@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
-import { validateOrigin } from "@/lib/security"
+import { validateOrigin, getClientIp } from "@/lib/security"
+import { validateSession, SESSION_CONFIG, logSecurityEvent, hashFingerprint } from "@/lib/session-security"
+import { hashIpAddress } from "@/lib/security"
 
 /**
  * Session timeout constants
@@ -107,6 +109,42 @@ export async function proxy(request: NextRequest) {
   const isApiRoute = request.nextUrl.pathname.startsWith("/api/")
 
   if (user) {
+    // SESSION SECURITY: Validate session binding (anti-hijacking)
+    const sessionToken = request.cookies.get(SESSION_CONFIG.SESSION_BINDING_COOKIE)?.value
+    
+    if (sessionToken) {
+      // Extract fingerprint from request headers (set by client)
+      const fingerprintHeader = request.headers.get('x-fingerprint')
+      
+      if (fingerprintHeader) {
+        try {
+          const fingerprint = JSON.parse(fingerprintHeader)
+          const ip = getClientIp(request)
+          
+          const validation = await validateSession(sessionToken, fingerprint, ip)
+          
+          if (!validation.valid) {
+            // Session hijack detected! Invalidate and redirect
+            console.warn(`Session security violation: ${validation.reason} for user ${validation.userId}`)
+            
+            // Sign out from Supabase
+            await supabase.auth.signOut()
+            
+            // Clear the session binding cookie
+            const errorResponse = isApiRoute
+              ? NextResponse.json({ error: "Session invalid" }, { status: 401 })
+              : NextResponse.redirect(new URL("/login?reason=session_invalid", request.url))
+            
+            errorResponse.cookies.delete(SESSION_CONFIG.SESSION_BINDING_COOKIE)
+            return applySecurityHeaders(errorResponse)
+          }
+        } catch (e) {
+          // Invalid fingerprint header - suspicious
+          console.warn('Invalid fingerprint header:', e)
+        }
+      }
+    }
+
     // OPTIMIZATION: Try to get user metadata from JWT claims first
     // This avoids a database query on every request
     let role = user.user_metadata?.role
