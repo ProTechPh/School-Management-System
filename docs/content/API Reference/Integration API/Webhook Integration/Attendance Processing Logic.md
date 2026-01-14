@@ -75,8 +75,8 @@ Start([Participant Leaves Meeting]) --> A{Is Student?}
 A --> |No| End1([No Action])
 A --> |Yes| B[Calculate Total Duration]
 B --> C{Duration >= 15 min?}
-C --> |Yes| D[Mark as "present"]
-C --> |No| E[Mark as "partial"]
+C --> |Yes| D[Mark as present]
+C --> |No| E[Mark as partial]
 D --> F[Update attendance_records]
 E --> F
 F --> End2([Complete])
