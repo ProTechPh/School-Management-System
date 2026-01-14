@@ -5,3 +5,4 @@ node_modules/
 
 # Kilo Code agent worktrees
 .kilocode/worktrees/
+.qoder/
