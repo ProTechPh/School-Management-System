@@ -60,7 +60,7 @@
     "react": "^19.2.1",
     "react-day-picker": "9.8.0",
     "react-dom": "^19.2.1",
-    "react-hook-form": "^7.71.0",
+    "react-hook-form": "^7.71.1",
     "react-resizable-panels": "^4.3.3",
     "recharts": "2.15.4",
     "server-only": "^0.0.1",
